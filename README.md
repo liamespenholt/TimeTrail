@@ -1,100 +1,56 @@
-# TimeTrail — historiskt dagligt geografiquiz
+# TimeTrail v0.2 — Historical Atlas Quiz
 
-En första **spelbar prototyp** av ett dagligt historiskt kartquiz i klassisk atlasstil. Språket är svenska.
+TimeTrail is a small, English-language historical geography game built with vanilla HTML, CSS and JavaScript, designed for GitHub Pages.
 
-## Vad kan man göra?
+## Play the pilot expedition
 
-- Spela en daglig resa med fem historiska stationer i **Europa år 1900**.
-- Se en schematisk animerad färd mellan städer.
-- Besvara flervalsfrågor och klicka på rätt historiskt territorium direkt på kartan.
-- Få 100, 60 eller 30 poäng för rätt svar på första, andra eller tredje försöket i kartfrågor.
-- Få ett slutresultat (max 500 poäng) som kan kopieras och delas.
-- Utforska sju historiska kartbilder (1800, 1880, 1900, 1914, 1938, 1945 och 2000) med tidsreglaget.
-- Spela direkt på dator eller mobil utan inloggning.
+Explore Europe in **1900** by completing **five stops**:
 
-## Starta lokalt
+1. Find the **German Empire** on an unlabeled historical map.
+2. Travel to **Vienna** and answer a historical multiple-choice question.
+3. Locate **Constantinople** among five unlabeled city markers.
+4. Travel to **Athens** and answer a history question.
+5. Find the **Kingdom of Italy**, then travel to Rome to see your score.
 
-Projektet är skrivet i **ren HTML, CSS och JavaScript**, utan ramverk eller byggsteg. Det är avsiktligt för att göra prototypen enkel att testa, modifiera och publicera.
+Navigation challenges get up to three guesses (100, 60 or 30 points); incorrect repeat clicks are ignored. Multiple-choice questions allow one try (100 or 0 points). Players can reveal navigation answers for 0 points. A result screen shows the maximum of **500 points** and can be shared.
 
-1. Installera Python 3 om det inte redan finns (eller använd exempelvis VS Code Live Server).
-2. Öppna terminalen i projektmappen.
-3. Kör:
+Destinations, map labels, and unvisited route segments are hidden until they are discovered. The journey and attempts are saved in the current browser with localStorage. A reload during travel completes the animation; it does not lose your quiz progress.
 
-```bash
-python -m http.server 8000
-```
+The pilot journey is **replayable** during development. This is not yet a unique new quiz every day, nor is it an anti-cheat competitive leaderboard. Future versions can add a validated daily question bank and server-side ranking.
 
-4. Öppna **http://localhost:8000** i webbläsaren.
+## Run locally
 
-**Internet krävs för själva gränsdatan**: spelet hämtar historiska GeoJSON-kartor från ett externt GitHub-baserat arkiv via jsDelivr (reservkälla är GitHub Raw). Om hämtningen misslyckas visas ett tydligt felmeddelande. Frågorna går fortfarande att spela, men kartfrågorna kräver historisk gränsdata för att besvaras.
+Start an HTTP server in the folder (for instance `python -m http.server 8000`) and open `http://localhost:8000`. The historical maps load from [Historical Basemaps](https://github.com/aourednik/historical-basemaps) through jsDelivr, falling back to GitHub Raw. You need an internet connection for map questions to work.
 
-## Publicera på GitHub Pages
+No bundler or Node dependencies are needed to host this version.
 
-1. Skapa ett nytt **public** repository på GitHub, exempelvis `timetrail`.
-2. Ladda upp projektfilerna i repositoryts rot: `index.html`, `styles.css`, `app.js`, `README.md` och `.nojekyll` (den sista är frivillig).
-3. Gå till **Settings → Pages**.
-4. Välj **Deploy from a branch**, `main` och `/ (root)` och spara.
-5. När GitHub Pages har publicerat öppnar du `https://DITT-ANVÄNDARNAMN.github.io/timetrail/`.
+## Deploy
 
-Det krävs **ingen** Node-installation, `npm install` eller Vite-server för denna version. GitHub Pages kan servera filerna direkt.
+GitHub repository → Settings → Pages → Deploy from a branch → `main` / `(root)`.
 
-## Projektstruktur
+## Historical accuracy and data license
 
-```text
-timetrail/
-├─ index.html       # Sidans struktur och navigering
-├─ styles.css       # Historisk atlasdesign och mobilanpassning
-├─ app.js           # Spelregler, frågor, animationer och kartmotor
-├─ README.md
-└─ .nojekyll        # GitHub Pages
-```
+- The 1900 polygons come from [Historical Basemaps](https://github.com/aourednik/historical-basemaps), distributed under **GPL-3.0**. Review reuse/attribution obligations before commercial deployment.
+- The city locations use modern approximate coordinates of historically relevant settlements, and animated route segments are **schematic**; they are not validated 1900 railway lines.
+- Cartographic boundaries are simplified, and some claims are historically disputed or approximate.
+- Each pilot question has a reference URL visible after answering; verify source availability and exact claims before broad launch.
 
-## Kartdata och källhänvisning
+## Game-state rules
 
-Historiska gränser hämtas dynamiskt från:
+1. Country/city navigation question first, then reveal and animate the journey.
+2. For multiple choice, animate the journey to that city **before** showing the question.
+3. Hide unvisited destinations and country labels during unresolved navigation.
+4. Do not let a navigation target equal the player's current city/country.
+5. Wrong guesses on the same country/marker don't consume additional attempts. Clicking sea or empty space doesn't consume attempts.
+6. Keep progress across reloads. Replay is allowed in the pilot.
 
-- [Historical Basemaps – aourednik](https://github.com/aourednik/historical-basemaps)
-- Filer som `geojson/world_1900.geojson` och `geojson/world_1914.geojson`.
-- **Dataarkivets licens är GNU GPL-3.0.** Läs originallicensen och villkoren innan du distribuerar kartdatan, bygger vidare eller använder prototypen kommersiellt. Appen länkar till källan i kartvyn. Prototypen inkluderar inte själva GeoJSON-filerna.
+## Next development phases
 
-Kartorna visar **översiktlig, historiskt informerad geopolitisk geografi**. De är inte kompletta eller exakt verifierade för varje gräns, koloni, territorium eller dag på året. Källprojektet beskriver självt materialet som ett pågående arbete. Fordonsrörelsen är **illustrativ**, inte en rekonstruktion av faktiska järnvägar eller vägar 1900.
+- Historical data quality assurance with source review.
+- More chapters/years with a robust daily rotation.
+- Better small-screen map affordances and screen-reader interaction.
+- Additional atlas design polish.
 
-## Prototypbegränsningar
+## Local gameplay tests
 
-- Det finns **fyra handskrivna resor** om fem frågor; de roterar efter kalenderdatum i tidszonen *Europe/Stockholm*. Efter fyra dagar återkommer samma innehåll. Lägg till fler poster i `TOURS` för att göra det till en riktig daglig innehållstjänst.
-- Frågorna är statiska och faktagranskning, innehållsförvaltning och källreferenser per fråga behöver utvecklas inför en publik lansering.
-- Poäng räknas lokalt i webbläsaren; det finns ingen server som skyddar mot fusk eller validerar topplistor.
-- Tidsreglaget hoppar mellan **kartdatabasens utvalda år**, inte varje kalenderår. Spelets quiz är låst till 1900.
-- Kartdatakällan använder en rörlig `master`-gren. Frys datasetversionen till ett specifikt commit-hash inför en produktionslansering så att spelare alltid får samma kartbild.
-- Teckensnitt från Google Fonts är valfria; sidan använder reservtypsnitt om de inte laddas.
-
-## Lägga till en resa
-
-I `app.js`, leta efter konstanten `TOURS`. Varje resa har titel, startstad och fem poster i `stops`. En fråga kan vara:
-
-```js
-{ city: 'berlin', type: 'choice',
-  question: 'Vem var kejsare i Tyskland år 1900?',
-  options: ['Person A', 'Wilhelm II', 'Person C', 'Person D'],
-  correct: 1,
-  fact: 'Wilhelm II regerade från 1888 till 1918.' }
-```
-
-Eller en klickfråga för kartan:
-
-```js
-{ city: 'wien', type: 'map',
-  question: 'Klicka på Österrike–Ungern.',
-  target: ['Austria Hungary'],
-  fact: 'En dubbelmonarki 1867–1918.' }
-```
-
-Det historiska namn som anges i `target` behöver matcha GeoJSON-datafältet `NAME` i kartarkivet för år 1900.
-
-## Nästa utvecklingssteg
-
-1. Lägg till fler handskrivna, källförankrade dagsresor.
-2. Lagra historiska kartbilder lokalt eller i egen CDN under tydligt hanterad licens.
-3. Ge varje fråga ett källfält och granska historiska frågor med hänsyn till årtal.
-4. Förbättra kartans geografiska projektion, etiketter och möjligheten att klicka på små territorier.
-5. Utvärdera användarkonton, poänghistorik och delningslänkar efter användartester.
+With Node.js installed, run `node tests/core.test.cjs`. The suite runs without packages or browsers, exercises the complete five-stop flow, verifies duplicate-guess protection and score calculation, and checks state restoration. Its simplified polygon fixture is only for testing interaction; it does **not** verify the external source's historical geometry.
