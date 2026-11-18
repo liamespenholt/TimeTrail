@@ -26,7 +26,7 @@
     leopold: 'https://www.britannica.com/biography/Leopold-II-king-of-Belgium',
     portugal: 'https://www.britannica.com/place/Portugal/History',
     spain: 'https://www.britannica.com/place/Spain/The-restoration',
-    expo: 'https://www.olympics.com/ioc/history',
+    expo: 'https://international.bie-paris.org/site/en/1900-paris',
     serbia: 'https://www.britannica.com/place/Serbia/History',
     bulgaria: 'https://en.wikisource.org/wiki/1911_Encyclop%C3%A6dia_Britannica/Bulgaria/History',
     greece: 'https://www.britannica.com/place/Greece/History',
