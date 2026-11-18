@@ -1,47 +1,20 @@
-/* TimeTrail v0.2 – core gameplay (pilot journey, English UI).
+/* TimeTrail v0.3 – curated daily journeys (English UI).
    Historical boundaries: aourednik/historical-basemaps (GPL-3.0).
    Animated lines are schematic travel routes, not verified 1900 railways. */
 'use strict';
 
 const HISTORICAL_YEARS = [1800, 1880, 1900, 1914, 1938, 1945, 2000];
-const CITIES = {
-  stockholm: {name:'Stockholm',country:'Sweden–Norway',countryId:'sweden_norway',lon:18.06,lat:59.33},
-  berlin: {name:'Berlin',country:'German Empire',countryId:'german_empire',lon:13.40,lat:52.52},
-  vienna: {name:'Vienna',country:'Austria–Hungary',countryId:'austria_hungary',lon:16.37,lat:48.21},
-  constantinople: {name:'Constantinople',country:'Ottoman Empire',countryId:'ottoman_empire',lon:28.98,lat:41.01},
-  athens: {name:'Athens',country:'Kingdom of Greece',countryId:'greece',lon:23.73,lat:37.98},
-  rome: {name:'Rome',country:'Kingdom of Italy',countryId:'kingdom_italy',lon:12.50,lat:41.90},
-  bucharest: {name:'Bucharest',country:'Kingdom of Romania',countryId:'romania',lon:26.10,lat:44.43},
-  belgrade: {name:'Belgrade',country:'Kingdom of Serbia',countryId:'serbia',lon:20.46,lat:44.81},
-  odessa: {name:'Odessa',country:'Russian Empire',countryId:'russian_empire',lon:30.73,lat:46.48}
-};
-const COUNTRIES = {
-  'Germany': {id:'german_empire',name:'German Empire'},
-  'Italy': {id:'kingdom_italy',name:'Kingdom of Italy'},
-  'Austria Hungary': {id:'austria_hungary',name:'Austria–Hungary'},
-  'Ottoman Empire': {id:'ottoman_empire',name:'Ottoman Empire'},
-  'Sweden–Norway': {id:'sweden_norway',name:'Sweden–Norway'},
-  'Greece': {id:'greece',name:'Kingdom of Greece'},
-  'Romania': {id:'romania',name:'Kingdom of Romania'},
-  'Serbia': {id:'serbia',name:'Kingdom of Serbia'},
-  'Russian Empire': {id:'russian_empire',name:'Russian Empire'}
-};
-const TOUR = {
-  id:'europe-1900-v02', title:'Europe at the Turn of the Century', subtitle:'A journey through empires and kingdoms',
-  year:1900, start:'stockholm',
-  stops:[
-    {id:'germany',city:'berlin',type:'country',targetId:'german_empire',difficulty:'Easy',question:'Find the empire formed by the unification of German states in 1871.',fact:'The German Empire was proclaimed in 1871. Its capital was Berlin, and Wilhelm II was its emperor in 1900.',source:'https://www.britannica.com/place/German-Empire'},
-    {id:'vienna',city:'vienna',type:'choice',difficulty:'Medium',question:'Who was Emperor of Austria and King of Hungary in 1900?',options:['Wilhelm II','Franz Joseph I','Nicholas II','Edward VII'],correct:1,fact:'Franz Joseph I ruled Austria from 1848 to 1916 and was King of Hungary under the Dual Monarchy established in 1867.',source:'https://www.britannica.com/biography/Franz-Joseph'},
-    {id:'constantinople',city:'constantinople',type:'city',targetId:'constantinople',candidates:['constantinople','athens','bucharest','belgrade','odessa'],difficulty:'Medium',question:'Find the city that served as the capital of the Ottoman Empire in 1900.',fact:'Constantinople, now Istanbul, served as the capital of the Ottoman Empire for centuries. The city stands on the Bosporus Strait.',source:'https://www.britannica.com/place/Istanbul'},
-    {id:'athens',city:'athens',type:'choice',difficulty:'Medium',question:'In which year were the first modern Olympic Games held in Athens?',options:['1888','1896','1900','1904'],correct:1,fact:'The first modern Olympic Games were held in Athens in April 1896.',source:'https://olympics.com/en/olympic-games/athens-1896'},
-    {id:'italy',city:'rome',type:'country',targetId:'kingdom_italy',difficulty:'Hard',question:'Find the kingdom proclaimed in 1861 that had Rome as its capital by 1900.',fact:'The Kingdom of Italy was proclaimed in 1861. Rome became its capital in 1871, following its capture in 1870.',source:'https://www.britannica.com/place/Italy/Unification'}
-  ]
-};
+// Content is loaded before app.js and is shared with Node's content tests.
+if (typeof TIMETRAIL_CONTENT === 'undefined') throw new Error('Historical question pack failed to load');
+const CONTENT = TIMETRAIL_CONTENT;
+const CITIES = CONTENT.cities;
+const COUNTRIES = CONTENT.countriesByGeoName;
+const UTC_DAY = new Date().toISOString().slice(0,10);
+const TOUR = CONTENT.journeyForDay(UTC_DAY);
 const $ = id => document.getElementById(id);
 const canvas=$('map-canvas'), ctx=canvas.getContext('2d');
 const view=$('map-viewport'), journal=$('journal');
-const UTC_DAY = new Date().toISOString().slice(0,10);
-const SAVE_KEY=`timetrail-v02-${TOUR.id}-${UTC_DAY}`;
+const SAVE_KEY=`timetrail-v03-${TOUR.id}-${UTC_DAY}`;
 const formattedDate=new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}).format(new Date());
 $('header-date').textContent=formattedDate.toUpperCase();
 let travelToken=0;
@@ -66,7 +39,7 @@ function stopList(){return `<div class="destinations"><div class="destinations-h
   const visible=shownDestination(i), finished=state.results.length>i, current=i===state.stop&&!['home','explore','results'].includes(state.phase);
   return `<div class="stop-row ${finished?'done':current?'current':''}"><span class="stop-index">${finished?'✓':String(i+1).padStart(2,'0')}</span><b>${visible?escapeHTML(CITIES[stop.city].name):'Undiscovered'}</b><small>${finished?`${state.results[i].points} PTS`:current?'IN PROGRESS':'· · ·'}</small></div>`;
 }).join('')}</div></div>`;}
-function homeMarkup(){const stored=readSaved();return `<div class="journal-kicker">DAILY HISTORICAL EXPEDITION · PILOT</div><h2>Europe at the <em>Turn of the Century.</em></h2><p class="journal-lead">Five historic destinations. Locate countries and cities, answer questions and uncover the route across Europe in 1900.</p>${tourProgress()}${stopList()}<div class="button-spacer"><button class="button-primary" id="start-journey">${stored&&stored.phase!=='home'?'CONTINUE JOURNEY':'BEGIN EXPEDITION'} <span>→</span></button><div class="button-note">Prototype chapter · Replayable · No account needed</div></div>`;}
+function homeMarkup(){const stored=readSaved();return `<div class="journal-kicker">DAILY HISTORICAL EXPEDITION · ${escapeHTML(UTC_DAY)}</div><h2>${escapeHTML(TOUR.title)}</h2><p class="journal-lead">${escapeHTML(TOUR.subtitle)}. Start in ${escapeHTML(CITIES[TOUR.start].name)}, uncover five historical destinations and earn up to 500 points.</p>${tourProgress()}${stopList()}<div class="button-spacer"><button class="button-primary" id="start-journey">${stored&&stored.phase!=='home'?'CONTINUE JOURNEY':'BEGIN EXPEDITION'} <span>→</span></button><div class="button-note">Ten curated routes rotate daily · All players get the same route · Replayable pilot</div></div>`;}
 function transitMarkup(){return `<div class="journal-kicker">LEG ${state.stop+1} / 5</div><div class="travel-icon">♧</div><h2 class="travel-text">Travelling to ${escapeHTML(CITIES[state.transit.toId].name)}…</h2><p class="travel-sub">Following an illustrated route across historical Europe.</p>${stopList()}<div class="button-spacer"><button class="button-secondary skip-button" id="skip-travel">SKIP ANIMATION →</button><div class="button-note">The route is schematic, not a verified historical railway.</div></div>`;}
 function arrivalMarkup(){const city=CITIES[state.currentCity];return `<div class="journal-kicker">DESTINATION DISCOVERED</div><div class="travel-icon">✦</div><h2>You have reached <em>${escapeHTML(city.name)}.</em></h2><p class="journal-lead">${escapeHTML(city.country)} · Year 1900</p>${stopList()}<div class="button-spacer"><button class="button-primary" id="next-stop">${state.stop===4?'SEE YOUR RESULTS':'CONTINUE EXPEDITION'} →</button></div>`;}
 function questionMarkup(){
@@ -82,9 +55,9 @@ function questionMarkup(){
   const action=isAnswered?`<button class="button-primary" id="next-stop">${isNav?`TRAVEL TO ${escapeHTML(CITIES[q.city].name.toUpperCase())}`:state.stop===4?'VIEW RESULTS':'NEXT STOP'} →</button>`:`<div class="question-actions">${isNav?`<button class="button-secondary" id="reveal-answer">REVEAL ANSWER · 0 PTS</button>`:''}<p class="small-muted">${isNav?'Three attempts: 100 / 60 / 30 points. Repeat clicks on the same wrong answer do not count.':'One answer only: 100 points for a correct choice.'}</p></div>`;
   return `${scoreLine}${answerLocation}<h2 class="question-text">${escapeHTML(q.question)}</h2><p class="question-hint">${isNav?'Study the map carefully. Drag or zoom as needed.':'Choose the best answer from the four options below.'}</p>${options}${response}<div class="button-spacer">${action}</div>`;
 }
-function resultMarkup(){const blurb=state.score>=450?'Master explorer!':state.score>=300?'A skilled time traveller!':state.score>=150?'A promising explorer!':'Every expedition starts with curiosity.';return `<div class="journal-kicker">EXPEDITION COMPLETED</div><h2>Your journey is <em>complete.</em></h2><p class="journal-lead">Five historic stops through Europe in the year 1900.</p><div class="ornament">✢</div><div class="score-total">${state.score} <span>/ 500</span></div><div class="result-icons" aria-label="Points earned for each stop">${medal(state.results)}</div><div class="result-banner"><strong>${blurb}</strong><small>${state.results.filter(r=>r.points>0).length} of 5 stops awarded points · Pilot expedition</small></div><div class="stamps"><span class="stamp">EUROPE 1900</span><span class="stamp">5 DESTINATIONS</span></div><div class="result-buttons"><button class="button-primary" id="share-result">COPY RESULTS ↗</button><button class="button-secondary" id="replay">REPLAY PILOT JOURNEY</button></div>`;}
-function exploreMarkup(){const index=HISTORICAL_YEARS.indexOf(state.year);return `<div class="journal-kicker">THE HISTORICAL ATLAS</div><h2>A world <em>before ours.</em></h2><p class="journal-lead">Discover how Europe's borders and empires changed. Move between the available historical map years.</p><div class="explore-controls"><div class="year-row"><span class="overline">SELECT MAP YEAR</span><strong class="year-big" id="year-text">${state.year}</strong></div><input id="year-slider" aria-label="Select historical map year" type="range" min="0" max="${HISTORICAL_YEARS.length-1}" step="1" value="${index}"/><div class="year-range-labels"><span>1800</span><span>2000</span></div></div><div class="explore-notice"><b>About this map</b><br/>Boundaries come from historical GeoJSON data. These are selected snapshots; some boundaries and territorial claims are approximate or disputed.</div><div class="ornament">✢</div><p class="journal-lead">The pilot expedition always uses the 1900 map.</p><div class="button-spacer"><button class="button-primary" id="back-to-daily">RETURN TO EXPEDITION →</button></div>`;}
-const COUNTRY_DISPLAY={german_empire:'German Empire',kingdom_italy:'Kingdom of Italy'};
+function resultMarkup(){const blurb=state.score>=450?'Master explorer!':state.score>=300?'A skilled time traveller!':state.score>=150?'A promising explorer!':'Every expedition starts with curiosity.';return `<div class="journal-kicker">EXPEDITION COMPLETED</div><h2>Your journey is <em>complete.</em></h2><p class="journal-lead">${escapeHTML(TOUR.title)} · Five historic stops through Europe in 1900.</p><div class="ornament">✢</div><div class="score-total">${state.score} <span>/ 500</span></div><div class="result-icons" aria-label="Points earned for each stop">${medal(state.results)}</div><div class="result-banner"><strong>${blurb}</strong><small>${state.results.filter(r=>r.points>0).length} of 5 stops awarded points · ${escapeHTML(UTC_DAY)}</small></div><div class="stamps"><span class="stamp">EUROPE 1900</span><span class="stamp">5 DESTINATIONS</span></div><div class="result-buttons"><button class="button-primary" id="share-result">COPY RESULTS ↗</button><button class="button-secondary" id="replay">REPLAY PRACTICE JOURNEY</button></div>`;}
+function exploreMarkup(){const index=HISTORICAL_YEARS.indexOf(state.year);return `<div class="journal-kicker">THE HISTORICAL ATLAS</div><h2>A world <em>before ours.</em></h2><p class="journal-lead">Discover how Europe's borders and empires changed. Move between the available historical map years.</p><div class="explore-controls"><div class="year-row"><span class="overline">SELECT MAP YEAR</span><strong class="year-big" id="year-text">${state.year}</strong></div><input id="year-slider" aria-label="Select historical map year" type="range" min="0" max="${HISTORICAL_YEARS.length-1}" step="1" value="${index}"/><div class="year-range-labels"><span>1800</span><span>2000</span></div></div><div class="explore-notice"><b>About this map</b><br/>Boundaries come from historical GeoJSON data. These are selected snapshots; some boundaries and territorial claims are approximate or disputed.</div><div class="ornament">✢</div><p class="journal-lead">Daily expeditions currently use the 1900 map; ten curated chapters repeat until new content is released.</p><div class="button-spacer"><button class="button-primary" id="back-to-daily">RETURN TO EXPEDITION →</button></div>`;}
+const COUNTRY_DISPLAY=Object.fromEntries(Object.values(COUNTRIES).map(country=>[country.id,country.name]));
 
 function renderJournal(){
   updateNav();
@@ -101,8 +74,8 @@ function renderJournal(){
   journal.querySelector('#year-slider')?.addEventListener('input',e=>{state.year=HISTORICAL_YEARS[Number(e.target.value)];$('year-text').textContent=state.year;updateNav();resetMap();loadMap(state.year);});
   scheduleDraw();
 }
-function saveGame(){if(state.phase==='home'||state.phase==='explore')return;try{localStorage.setItem(SAVE_KEY,JSON.stringify({version:2,tour:TOUR.id,phase:state.phase,stop:state.stop,currentCity:state.currentCity,visited:state.visited,score:state.score,results:state.results,attempts:state.attempts,wrongIds:state.wrongIds,lastWrong:state.lastWrong,chosen:state.chosen,feedback:state.feedback,transit:state.transit?{fromId:state.transit.fromId,toId:state.transit.toId,nextPhase:state.transit.nextPhase}:null}));}catch(error){console.warn('Cannot save progress:',error);}}
-function readSaved(){try{const s=JSON.parse(localStorage.getItem(SAVE_KEY));return s&&s.version===2&&s.tour===TOUR.id&&Number.isInteger(s.stop)&&s.stop>=0&&s.stop<5&&['question','feedback','arrival','travel','results'].includes(s.phase)&&Array.isArray(s.results)&&s.results.length<=5?s:null;}catch{return null;}}
+function saveGame(){if(state.phase==='home'||state.phase==='explore')return;try{localStorage.setItem(SAVE_KEY,JSON.stringify({version:3,tour:TOUR.id,phase:state.phase,stop:state.stop,currentCity:state.currentCity,visited:state.visited,score:state.score,results:state.results,attempts:state.attempts,wrongIds:state.wrongIds,lastWrong:state.lastWrong,chosen:state.chosen,feedback:state.feedback,transit:state.transit?{fromId:state.transit.fromId,toId:state.transit.toId,nextPhase:state.transit.nextPhase}:null}));}catch(error){console.warn('Cannot save progress:',error);}}
+function readSaved(){try{const s=JSON.parse(localStorage.getItem(SAVE_KEY));return s&&s.version===3&&s.tour===TOUR.id&&Number.isInteger(s.stop)&&s.stop>=0&&s.stop<5&&['question','feedback','arrival','travel','results'].includes(s.phase)&&Array.isArray(s.results)&&s.results.length<=5?s:null;}catch{return null;}}
 function restoreGame(){const s=readSaved();if(!s){startJourney();return;}travelToken++;Object.assign(state,{phase:s.phase,year:1900,stop:s.stop,currentCity:CITIES[s.currentCity]?s.currentCity:TOUR.start,visited:Array.isArray(s.visited)?s.visited.filter(k=>CITIES[k]):[TOUR.start],score:s.score,results:s.results,attempts:s.attempts||0,wrongIds:Array.isArray(s.wrongIds)?s.wrongIds:[],lastWrong:s.lastWrong||'',chosen:s.chosen??null,feedback:s.feedback||null,transit:null});if(s.phase==='travel'&&s.transit){state.currentCity=s.transit.toId;state.visited=[...new Set([...state.visited,s.transit.toId])];state.phase=s.transit.nextPhase;}state.year=1900;resetMap();loadMap(1900);if(state.phase==='question'&&currentQuestion().type==='city')focusCityCandidates();renderJournal();saveGame();}
 function clearAttempt(){state.attempts=0;state.wrongIds=[];state.lastWrong='';state.chosen=null;state.feedback=null;}
 function startJourney(){travelToken++;Object.assign(state,{phase:'home',year:1900,stop:0,currentCity:TOUR.start,visited:[TOUR.start],score:0,results:[],transit:null});clearAttempt();resetMap();loadMap(1900);enterStop();}
@@ -116,7 +89,7 @@ function registerWrong(id,name){state.wrongIds.push(id);state.attempts++;state.l
 function completeAnswer(points){if(state.phase!=='question'||state.results.length!==state.stop)return;const q=currentQuestion();state.phase='feedback';state.score+=points;state.feedback={points,correct:q.type==='city'?CITIES[q.targetId].name:q.type==='country'?COUNTRY_DISPLAY[q.targetId]:q.options[q.correct]};state.results.push({id:q.id,points});saveGame();renderJournal();}
 function nextStop(){if(state.phase==='feedback'){const q=currentQuestion();if(isNavigation(q)){startTravel(q.city,state.stop===4?'results':'arrival');}else advanceStop();return;}if(state.phase==='arrival')advanceStop();}
 function advanceStop(){if(state.stop===4){state.phase='results';saveGame();renderJournal();return;}state.stop++;enterStop();}
-function shareResult(){const text=`TimeTrail · Europe 1900 🌍\n${state.score}/500 points\n${medal(state.results)}\nPilot expedition · ${location.href.split('#')[0]}`;const btn=$('share-result');if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(()=>{btn.textContent='COPIED ✓';}).catch(()=>prompt('Copy your result:',text));}else prompt('Copy your result:',text);}
+function shareResult(){const text=`TimeTrail · ${UTC_DAY} · Europe 1900 🌍\n${TOUR.title}\n${state.score}/500 points\n${medal(state.results)}\n${location.href.split('#')[0]}`;const btn=$('share-result');if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(()=>{btn.textContent='COPIED ✓';}).catch(()=>prompt('Copy your result:',text));}else prompt('Copy your result:',text);}
 function showExplore(){if(state.phase!=='explore')saveGame();travelToken++;state.transit=null;state.phase='explore';state.year=1900;resetMap();renderJournal();loadMap(1900);}
 function showDaily(){travelToken++;if(readSaved()){restoreGame();return;}state.phase='home';state.year=1900;state.stop=0;state.transit=null;resetMap();renderJournal();loadMap(1900);}
 $('nav-daily').addEventListener('click',showDaily);$('nav-explore').addEventListener('click',showExplore);$('brand-link').addEventListener('click',e=>{e.preventDefault();showDaily();});
@@ -170,14 +143,17 @@ async function loadMap(year){
 function resetMap(){mapState.zoom=1;mapState.panX=0;mapState.panY=0;mapState.needsBase=true;scheduleDraw();}
 function focusCityCandidates(){
  if(!mapState.w||!mapState.h)return;
- const q=currentQuestion();if(q.type!=='city')return;
- const ids=q.candidates,all=ids.map(id=>CITIES[id]);
- const minLon=Math.min(...all.map(c=>c.lon)),maxLon=Math.max(...all.map(c=>c.lon));
- const minLat=Math.min(...all.map(c=>c.lat)),maxLat=Math.max(...all.map(c=>c.lat));
- const centerLon=(minLon+maxLon)/2,centerLat=(minLat+maxLat)/2;
- mapState.zoom=3.0;
- const scale=Math.min(mapState.w/75,mapState.h/43)*mapState.zoom;
- mapState.panX=-(centerLon-18)*scale;mapState.panY=-(53-centerLat)*scale;
+ const q=currentQuestion();if(!q||q.type!=='city')return;
+ const points=q.candidates.map(id=>CITIES[id]);
+ const west=Math.min(...points.map(c=>c.lon)),east=Math.max(...points.map(c=>c.lon));
+ const south=Math.min(...points.map(c=>c.lat)),north=Math.max(...points.map(c=>c.lat));
+ const centerLon=(west+east)/2,centerLat=(south+north)/2;
+ const baseScale=Math.min(mapState.w/75,mapState.h/43);
+ const desiredScale=Math.min((mapState.w-80)/Math.max(east-west+2,8),(mapState.h-80)/Math.max(north-south+2,7));
+ mapState.zoom=Math.max(.75,Math.min(5,desiredScale/baseScale));
+ const scale=baseScale*mapState.zoom;
+ mapState.panX=-(centerLon-18)*scale;
+ mapState.panY=-(53-centerLat)*scale;
  mapState.needsBase=true;scheduleDraw();
 }
 function changeZoom(delta){mapState.zoom=Math.max(.75,Math.min(5,mapState.zoom*delta));mapState.needsBase=true;scheduleDraw();}
@@ -203,7 +179,7 @@ function renderBase(){
  for(let lat=30;lat<=80;lat+=5){const a=project(-25,lat),e=project(65,lat);b.beginPath();b.moveTo(a.x,a.y);b.lineTo(e.x,e.y);b.stroke();}
  for(const f of mapState.features){b.beginPath();for(const rings of f.pieces){for(const ring of rings){if(ring.length>=3)ringPath(b,ring);}}b.fillStyle=f.tint;b.fill('evenodd');b.lineJoin='round';b.strokeStyle='#716b50ad';b.lineWidth=.7;b.stroke();}
  // Never reveal labels during an active unresolved navigation challenge.
- const showNames=['home','explore','results','feedback','arrival'].includes(state.phase);
+ const showNames=['explore','results','feedback','arrival'].includes(state.phase);
  if(showNames&&state.year===1900){for(const [label,lon,lat,sz,variant] of LABELS_1900){
    if(w<600&&!['SWEDEN–NORWAY','GERMAN EMPIRE','AUSTRIA–HUNGARY','RUSSIAN EMPIRE','OTTOMAN EMPIRE'].includes(label))continue;
    const p=project(lon,lat);if(p.x<8||p.x>w-8||p.y<10||p.y>h-12)continue;
