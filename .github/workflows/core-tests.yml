@@ -1,7 +1,7 @@
-name: TimeTrail Core Tests
+name: TimeTrail Content and Gameplay
 on:
   push:
-    branches: [main]
+    branches: [main, 'feature/**']
   pull_request:
     branches: [main]
 jobs:
@@ -13,6 +13,8 @@ jobs:
         with:
           node-version: '22'
       - name: Check JavaScript syntax
-        run: node --check app.js
-      - name: Test v0.2 gameplay
-        run: node tests/core.test.cjs
+        run: |
+          node --check app.js
+          node --check content.js
+      - name: Test question bank, routes and gameplay
+        run: node --test tests/*.test.cjs
