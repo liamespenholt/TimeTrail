@@ -32,6 +32,8 @@ function updateNav(){
   $('nav-explore').classList.toggle('active',state.phase==='explore');
   $('intro-section').style.display=['home','explore'].includes(state.phase)?'':'none';
   $('map-title').textContent=`EUROPE · ${state.year}`;
+  const currentCountry=state.transit ? CITIES[state.transit.fromId].country : CITIES[state.currentCity].country;
+  $('current-country').textContent=state.phase==='explore'?'EXPLORE HISTORICAL EUROPE':`CURRENT COUNTRY · ${currentCountry.toUpperCase()}`;
   $('map-legend').textContent=`HISTORICAL BORDERS · ${state.year}`;
 }
 function tourProgress(){return `<div class="journey-meta"><div class="meta-item"><small>YEAR</small><strong>1900</strong></div><div class="meta-item"><small>STOPS</small><strong>05</strong></div><div class="meta-item"><small>PLAY TIME</small><strong>3–6 min</strong></div></div>`;}
@@ -97,6 +99,11 @@ $('nav-daily').addEventListener('click',showDaily);$('nav-explore').addEventList
 // Map rendering. Land borders come from historical GeoJSON, not modern OpenStreetMap.
 const VIEW={west:-19,east:55,south:32,north:74};
 const TINTS=['#cec19b','#d1c29b','#c1c19f','#d4c9ab','#b4b99f','#d2bea0','#c7b594','#b8bfa6','#cbb69a'];
+// Capital cities of the polities represented in the 1900 content pack.
+// We do not mark provincial cities (e.g. Prague, Warsaw) as independent capitals.
+const CAPITALS_1900=['stockholm','kristiania','berlin','vienna','budapest','constantinople',
+ 'athens','rome','bucharest','belgrade','copenhagen','st_petersburg','london',
+ 'amsterdam','brussels','paris','lisbon','madrid','sofia','bern'];
 const LABELS_1900=[
  ['ATLANTIC OCEAN',-12,49,13,'italic'],['NORTH SEA',2,58,11,'italic'],['MEDITERRANEAN',16,35,12,'italic'],
  ['SWEDEN–NORWAY',14,65,11],['GERMAN EMPIRE',10.6,52.1,11],['AUSTRIA–HUNGARY',17,47.7,10],
@@ -188,6 +195,36 @@ function renderBase(){
  }}
  b.strokeStyle='#a58c605c';b.lineWidth=1;b.strokeRect(8,8,w-16,h-16);mapState.needsBase=false;
 }
+function drawCapitals(){
+ // Only 1900 has a curated historical capital list; avoid placing 1900 labels on other years.
+ if(state.year!==1900)return;
+ const c=ctx,w=mapState.w,h=mapState.h;
+ const showLabels=!(state.phase==='question'&&isNavigation());
+ c.save();
+ for(const id of CAPITALS_1900){
+  const city=CITIES[id],p=project(city.lon,city.lat);
+  if(p.x<9||p.x>w-9||p.y<10||p.y>h-10)continue;
+  const outer=mapState.zoom>=1.6?7:5.7,inner=outer*.44;
+  c.beginPath();
+  for(let i=0;i<10;i++){
+   const a=-Math.PI/2+i*Math.PI/5,r=i%2===0?outer:inner;
+   if(i===0)c.moveTo(p.x+Math.cos(a)*r,p.y+Math.sin(a)*r);
+   else c.lineTo(p.x+Math.cos(a)*r,p.y+Math.sin(a)*r);
+  }
+  c.closePath();c.fillStyle='#705131';c.strokeStyle='#fff1c9';c.lineWidth=1.5;c.fill();c.stroke();
+  if(showLabels){
+   const active=state.currentCity===id;
+   // Label at higher zoom or on roomy screens; keep small screens legible.
+   if(!active&&w<600&&mapState.zoom<1.35)continue;
+   c.font=`${active?'bold ':''}${w<600?10:11}px Georgia,serif`;
+   c.textAlign='left';c.textBaseline='middle';c.lineWidth=3;
+   c.strokeStyle='#f3e6c8';c.fillStyle='#4c3b29';
+   c.strokeText(city.name,p.x+outer+4,p.y-outer-2);
+   c.fillText(city.name,p.x+outer+4,p.y-outer-2);
+  }
+ }
+ c.restore();
+}
 function drawRoute(){
  if(state.phase==='explore')return;
  const c=ctx,route=state.visited.map(id=>CITIES[id]);
@@ -225,7 +262,7 @@ function drawTooltip(){if(!state.hover)return;
  if(state.phase==='question'&&isNavigation())return;
  const {x,y,name}=state.hover,c=ctx,title=String(name).slice(0,45);
  c.save();c.font='12px Georgia,serif';const width=Math.min(240,c.measureText(title).width+20),px=Math.max(8,Math.min(mapState.w-width-8,x+12)),py=Math.max(8,Math.min(mapState.h-31,y-36));c.fillStyle='#f2e2c5f0';c.fillRect(px,py,width,29);c.strokeStyle='#947c59';c.strokeRect(px,py,width,29);c.fillStyle='#52412c';c.textAlign='left';c.fillText(title,px+10,py+19);c.restore();}
-function draw(){if(!mapState.w||!mapState.h)return;if(mapState.needsBase)renderBase();const {w,h,dpr}=mapState;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);if(mapState.cache)ctx.drawImage(mapState.cache,0,0,w,h);drawRoute();drawTooltip();}
+function draw(){if(!mapState.w||!mapState.h)return;if(mapState.needsBase)renderBase();const {w,h,dpr}=mapState;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);if(mapState.cache)ctx.drawImage(mapState.cache,0,0,w,h);drawCapitals();drawRoute();drawTooltip();}
 let queued=false;function scheduleDraw(){if(queued)return;queued=true;requestAnimationFrame(()=>{queued=false;draw();});}
 function containsRing(pt,ring){let inside=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++){const a=ring[i],b=ring[j];if(((a[1]>pt.lat)!==(b[1]>pt.lat))&&(pt.lon<(b[0]-a[0])*(pt.lat-a[1])/(b[1]-a[1])+a[0]))inside=!inside;}return inside;}
 function hitCountry(pt){for(let i=mapState.features.length-1;i>=0;i--){const f=mapState.features[i];for(const rings of f.pieces){if(containsRing(pt,rings[0])&&!rings.slice(1).some(r=>containsRing(pt,r)))return f;}}return null;}
