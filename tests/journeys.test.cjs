@@ -6,6 +6,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const appCode=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
 const contentCode=fs.readFileSync(path.join(__dirname,'..','content.js'),'utf8');
+const routesCode=fs.readFileSync(path.join(__dirname,'..','travel-routes.js'),'utf8');
 const pack=require('../content.js');
 const noop=()=>{};
 const fakeCtx=new Proxy({createLinearGradient:()=>({addColorStop:noop}),measureText:t=>({width:String(t).length*7})},
@@ -29,6 +30,7 @@ function harness(date){
   localStorage:{getItem:k=>data.get(k)||null,setItem:(k,v)=>data.set(k,v)},
   fetch:async()=>({ok:true,json:async()=>fixture})});
  vm.runInContext(contentCode,context,{filename:'content.js'});
+vm.runInContext(routesCode,context,{filename:'travel-routes.js'});
  vm.runInContext(appCode,context,{filename:'app.js'});
  const ev=source=>vm.runInContext(source,context);
  return {ev,elements,data};
