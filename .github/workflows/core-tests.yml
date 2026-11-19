@@ -15,6 +15,7 @@ jobs:
       - name: Check JavaScript syntax
         run: |
           node --check app.js
+          node --check travel-routes.js
           node --check content.js
       - name: Test question bank, routes and gameplay
         run: node --test tests/*.test.cjs
