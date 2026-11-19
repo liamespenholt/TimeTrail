@@ -7,6 +7,8 @@ const HISTORICAL_YEARS = [1800, 1880, 1900, 1914, 1938, 1945, 2000];
 // Content is loaded before app.js and is shared with Node's content tests.
 if (typeof TIMETRAIL_CONTENT === 'undefined') throw new Error('Historical question pack failed to load');
 const CONTENT = TIMETRAIL_CONTENT;
+if (typeof TIMETRAIL_ROUTES === 'undefined') throw new Error('Route planner failed to load');
+const ROUTES = TIMETRAIL_ROUTES;
 const CITIES = CONTENT.cities;
 const COUNTRIES = CONTENT.countriesByGeoName;
 const UTC_DAY = new Date().toISOString().slice(0,10);
@@ -21,6 +23,16 @@ let travelToken=0;
 const state={phase:'home',year:1900,stop:0,currentCity:TOUR.start,visited:[TOUR.start],score:0,results:[],attempts:0,wrongIds:[],lastWrong:'',chosen:null,feedback:null,transit:null,hover:null,loading:false};
 const mapState={w:0,h:0,dpr:1,zoom:1,panX:0,panY:0,cache:null,data:null,features:[],requestId:0,drag:null,needsBase:true};
 const yearCache=new Map();
+let journeyPlanner=ROUTES.createPlanner([]);
+const journeyRouteCache=new Map();
+function buildJourneyPlanner(){journeyPlanner=ROUTES.createPlanner(mapState.features);journeyRouteCache.clear();}
+function journeyRoute(fromId,toId){
+ const key=state.year+':'+fromId+':'+toId;
+ if(mapState.features.length&&journeyRouteCache.has(key))return journeyRouteCache.get(key);
+ const route=journeyPlanner.route(CITIES[fromId],CITIES[toId],TOUR.id+':'+fromId+':'+toId);
+ if(mapState.features.length)journeyRouteCache.set(key,route);
+ return route;
+}
 
 function escapeHTML(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function currentQuestion(){return TOUR.stops[state.stop];}
@@ -35,6 +47,10 @@ function updateNav(){
   const currentCountry=state.transit ? CITIES[state.transit.fromId].country : CITIES[state.currentCity].country;
   $('current-country').textContent=state.phase==='explore'?'EXPLORE HISTORICAL EUROPE':`CURRENT COUNTRY · ${currentCountry.toUpperCase()}`;
   $('map-legend').textContent=`HISTORICAL BORDERS · ${state.year}`;
+  const mapHint=$('map-task-hint');
+  const challenge=state.phase==='question'&&isNavigation();
+  mapHint.hidden=!challenge;
+  if(challenge)mapHint.textContent=currentQuestion().type==='country'?'◎ TAP THE CORRECT COUNTRY':'✦ CHOOSE A CITY MARKER · A–E';
 }
 function tourProgress(){return `<div class="journey-meta"><div class="meta-item"><small>YEAR</small><strong>1900</strong></div><div class="meta-item"><small>STOPS</small><strong>05</strong></div><div class="meta-item"><small>PLAY TIME</small><strong>3–6 min</strong></div></div>`;}
 function stopList(){return `<div class="destinations"><div class="destinations-head"><b>YOUR ITINERARY</b><span>5 STOPS</span></div><div class="stop-list">${TOUR.stops.map((stop,i)=>{
@@ -42,20 +58,30 @@ function stopList(){return `<div class="destinations"><div class="destinations-h
   return `<div class="stop-row ${finished?'done':current?'current':''}"><span class="stop-index">${finished?'✓':String(i+1).padStart(2,'0')}</span><b>${visible?escapeHTML(CITIES[stop.city].name):'Undiscovered'}</b><small>${finished?`${state.results[i].points} PTS`:current?'IN PROGRESS':'· · ·'}</small></div>`;
 }).join('')}</div></div>`;}
 function homeMarkup(){const stored=readSaved();return `<div class="journal-kicker">DAILY HISTORICAL EXPEDITION · ${escapeHTML(UTC_DAY)}</div><h2>${escapeHTML(TOUR.title)}</h2><p class="journal-lead">${escapeHTML(TOUR.subtitle)}. Start in ${escapeHTML(CITIES[TOUR.start].name)}, uncover five historical destinations and earn up to 500 points.</p>${tourProgress()}${stopList()}<div class="button-spacer"><button class="button-primary" id="start-journey">${stored&&stored.phase!=='home'?'CONTINUE JOURNEY':'BEGIN EXPEDITION'} <span>→</span></button><div class="button-note">Ten curated routes rotate daily · All players get the same route · Replayable pilot</div></div>`;}
-function transitMarkup(){return `<div class="journal-kicker">LEG ${state.stop+1} / 5</div><div class="travel-icon">♧</div><h2 class="travel-text">Travelling to ${escapeHTML(CITIES[state.transit.toId].name)}…</h2><p class="travel-sub">Following an illustrated route across historical Europe.</p>${stopList()}<div class="button-spacer"><button class="button-secondary skip-button" id="skip-travel">SKIP ANIMATION →</button><div class="button-note">The route is schematic, not a verified historical railway.</div></div>`;}
+function transitMarkup(){
+ const route=journeyRoute(state.transit.fromId,state.transit.toId);
+ const transport=route.hasShip?(route.hasTrain?'TRAIN + FERRY':'FERRY'):'TRAIN';
+ const symbol=route.hasShip?'⛴':'🚂';
+ return `<div class="journal-kicker">LEG ${state.stop+1} / 5</div><div class="travel-mode">${symbol} ${transport} JOURNEY</div><div class="travel-icon">✧</div><h2 class="travel-text">Travelling to ${escapeHTML(CITIES[state.transit.toId].name)}…</h2><p class="travel-sub">A winding journey across the landscapes and waterways of historical Europe.</p>${stopList()}<div class="button-spacer"><button class="button-secondary skip-button" id="skip-travel">SKIP ANIMATION →</button><div class="button-note">Routes are illustrated journeys, not verified 1900 rail or sailing paths.</div></div>`;
+}
 function arrivalMarkup(){const city=CITIES[state.currentCity];return `<div class="journal-kicker">DESTINATION DISCOVERED</div><div class="travel-icon">✦</div><h2>You have reached <em>${escapeHTML(city.name)}.</em></h2><p class="journal-lead">${escapeHTML(city.country)} · Year 1900</p>${stopList()}<div class="button-spacer"><button class="button-primary" id="next-stop">${state.stop===4?'SEE YOUR RESULTS':'CONTINUE EXPEDITION'} →</button></div>`;}
 function questionMarkup(){
   const q=currentQuestion(), isNav=isNavigation(q), city=CITIES[state.currentCity], remaining=3-state.attempts;
   const options=q.type==='choice'?`<div class="options">${q.options.map((opt,i)=>{
     let status=state.phase==='feedback'?(i===q.correct?' correct':i===state.chosen?' wrong':''):'';
     return `<button type="button" class="answer-option${status}" data-answer="${i}" ${state.phase!=='question'?'disabled':''}><span class="letter">${'ABCD'[i]}</span><span>${escapeHTML(opt)}</span><span class="answer-state">${state.phase==='feedback'&&i===q.correct?'✓':state.phase==='feedback'&&i===state.chosen?'×':''}</span></button>`;
-  }).join('')}</div>`:q.type==='country'?`<div class="map-action-prompt">◎ Select the correct territory on the map. Country labels are hidden.</div>`:`<div class="map-action-prompt">◎ Select the correct city marker on the map. Names are hidden.</div><div class="city-selection" aria-label="Choose a city marker">${q.candidates.map((id,i)=>`<button type="button" data-city-choice="${id}" ${state.phase!=='question'||!mapState.features.length?'disabled':''} class="city-choice" aria-label="Choose marker ${'ABCDE'[i]}">${'ABCDE'[i]}</button>`).join('')}</div>`;
+  }).join('')}</div>`:q.type==='city'?`<div class="city-selection" aria-label="Choose a city marker">${q.candidates.map((id,i)=>`<button type="button" data-city-choice="${id}" ${state.phase!=='question'||!mapState.features.length?'disabled':''} class="city-choice" aria-label="Choose marker ${'ABCDE'[i]}">${'ABCDE'[i]}</button>`).join('')}</div>`:'';
+  const challengeInfo=q.type==='country'?
+   {icon:'◎',eyebrow:'MAP CHALLENGE',title:'MARK THE CORRECT COUNTRY',detail:'Tap the matching territory on the map · 3 attempts'}:
+   q.type==='city'?{icon:'✦',eyebrow:'CITY CHALLENGE',title:'FIND THE CORRECT CITY',detail:'Select one of the A–E markers on the map · 3 attempts'}:
+   {icon:'?',eyebrow:'HISTORY QUIZ',title:'ANSWER THE QUESTION',detail:'Choose the correct answer below · 1 attempt'};
+  const taskGuide=`<div class="task-guide task-guide--${q.type}" role="note"><span class="task-guide-icon" aria-hidden="true">${challengeInfo.icon}</span><div class="task-guide-text"><small>${challengeInfo.eyebrow}</small><strong>${challengeInfo.title}</strong><span>${challengeInfo.detail}</span></div><span class="task-guide-arrow" aria-hidden="true">↗</span></div>`;
   const scoreLine=`<div class="quiz-top"><span class="stop-tag">STOP ${String(state.stop+1).padStart(2,'0')} / 05 · ${q.difficulty.toUpperCase()}</span><span class="point-tag">${state.score} / 500 PTS</span></div><div class="progress-track"><div class="progress-fill" style="width:${(state.stop+1)*20}%"></div></div>`;
   const isAnswered=state.phase==='feedback';
   const answerLocation=isAnswered?`<div class="location-line">✦ ${escapeHTML(CITIES[q.city].name.toUpperCase())} · ${escapeHTML(CITIES[q.city].country.toUpperCase())}</div>`:`<div class="location-line">✦ CURRENT LOCATION · ${escapeHTML(city.name.toUpperCase())}</div>`;
   const response=isAnswered?`<div class="answer-feedback ${state.feedback.points===0?'wrong':''}"><strong>${state.feedback.points?`✓ ${state.feedback.points} points earned`:'0 points · Answer revealed'}</strong>${isNav?`<p><b>Answer: ${escapeHTML(q.type==='city'?CITIES[q.targetId].name:COUNTRY_DISPLAY[q.targetId])}</b></p>`:''}<p>${escapeHTML(q.fact)}</p><a href="${escapeHTML(q.source)}" rel="noopener noreferrer" target="_blank">Historical reference ↗</a></div>`:state.lastWrong?`<div class="map-click-feedback">Not quite: ${escapeHTML(state.lastWrong)}. ${remaining} ${remaining===1?'attempt':'attempts'} remaining.</div>`:'';
   const action=isAnswered?`<button class="button-primary" id="next-stop">${isNav?`TRAVEL TO ${escapeHTML(CITIES[q.city].name.toUpperCase())}`:state.stop===4?'VIEW RESULTS':'NEXT STOP'} →</button>`:`<div class="question-actions">${isNav?`<button class="button-secondary" id="reveal-answer">REVEAL ANSWER · 0 PTS</button>`:''}<p class="small-muted">${isNav?'Three attempts: 100 / 60 / 30 points. Repeat clicks on the same wrong answer do not count.':'One answer only: 100 points for a correct choice.'}</p></div>`;
-  return `${scoreLine}${answerLocation}<h2 class="question-text">${escapeHTML(q.question)}</h2><p class="question-hint">${isNav?'Study the map carefully. Drag or zoom as needed.':'Choose the best answer from the four options below.'}</p>${options}${response}<div class="button-spacer">${action}</div>`;
+  return `${scoreLine}${answerLocation}${taskGuide}<h2 class="question-text">${escapeHTML(q.question)}</h2><p class="question-hint">${isNav?'Study the map carefully. Drag or zoom as needed.':'Choose the best answer from the four options below.'}</p>${options}${response}<div class="button-spacer">${action}</div>`;
 }
 function resultMarkup(){const blurb=state.score>=450?'Master explorer!':state.score>=300?'A skilled time traveller!':state.score>=150?'A promising explorer!':'Every expedition starts with curiosity.';return `<div class="journal-kicker">EXPEDITION COMPLETED</div><h2>Your journey is <em>complete.</em></h2><p class="journal-lead">${escapeHTML(TOUR.title)} · Five historic stops through Europe in 1900.</p><div class="ornament">✢</div><div class="score-total">${state.score} <span>/ 500</span></div><div class="result-icons" aria-label="Points earned for each stop">${medal(state.results)}</div><div class="result-banner"><strong>${blurb}</strong><small>${state.results.filter(r=>r.points>0).length} of 5 stops awarded points · ${escapeHTML(UTC_DAY)}</small></div><div class="stamps"><span class="stamp">EUROPE 1900</span><span class="stamp">5 DESTINATIONS</span></div><div class="result-buttons"><button class="button-primary" id="share-result">COPY RESULTS ↗</button><button class="button-secondary" id="replay">REPLAY PRACTICE JOURNEY</button></div>`;}
 function exploreMarkup(){const index=HISTORICAL_YEARS.indexOf(state.year);return `<div class="journal-kicker">THE HISTORICAL ATLAS</div><h2>A world <em>before ours.</em></h2><p class="journal-lead">Discover how Europe's borders and empires changed. Move between the available historical map years.</p><div class="explore-controls"><div class="year-row"><span class="overline">SELECT MAP YEAR</span><strong class="year-big" id="year-text">${state.year}</strong></div><input id="year-slider" aria-label="Select historical map year" type="range" min="0" max="${HISTORICAL_YEARS.length-1}" step="1" value="${index}"/><div class="year-range-labels"><span>1800</span><span>2000</span></div></div><div class="explore-notice"><b>About this map</b><br/>Boundaries come from historical GeoJSON data. These are selected snapshots; some boundaries and territorial claims are approximate or disputed.</div><div class="ornament">✢</div><p class="journal-lead">Daily expeditions currently use the 1900 map; ten curated chapters repeat until new content is released.</p><div class="button-spacer"><button class="button-primary" id="back-to-daily">RETURN TO EXPEDITION →</button></div>`;}
@@ -121,7 +147,7 @@ function hashString(s){let h=0;for(let i=0;i<s.length;i++)h=((h<<5)-h+s.charCode
 async function loadMap(year){
  const request=++mapState.requestId;
  if(yearCache.has(year)){
-  mapState.features=yearCache.get(year);mapState.needsBase=true;state.loading=false;
+  mapState.features=yearCache.get(year);buildJourneyPlanner();mapState.needsBase=true;state.loading=false;
   $('map-error').hidden=true;$('map-status').textContent='Historical map ready';renderJournal();return;
  }
  state.loading=true;mapState.features=[];mapState.needsBase=true;scheduleDraw();
@@ -133,11 +159,11 @@ async function loadMap(year){
    const response=await fetch(url,{cache:'force-cache'});if(!response.ok)throw Error(`HTTP ${response.status}`);
    const data=processMapData(await response.json());if(!data.length)throw Error('No boundaries found');
    yearCache.set(year,data);if(request!==mapState.requestId)return;
-   mapState.features=data;mapState.needsBase=true;state.loading=false;
+   mapState.features=data;buildJourneyPlanner();mapState.needsBase=true;state.loading=false;
    $('map-status').textContent='Historical map ready';$('map-error').hidden=true;renderJournal();return;
   }catch(err){if(request!==mapState.requestId)return;console.warn('Historical map source unavailable:',url,err);}
  }
- if(request===mapState.requestId){state.loading=false;mapState.features=[];mapState.needsBase=true;
+ if(request===mapState.requestId){state.loading=false;mapState.features=[];buildJourneyPlanner();mapState.needsBase=true;
    $('map-status').textContent='Map unavailable';$('map-error').hidden=false;renderJournal();}
 }
 function resetMap(){mapState.zoom=1;mapState.panX=0;mapState.panY=0;mapState.needsBase=true;scheduleDraw();}
@@ -199,20 +225,69 @@ function drawCapitals(){
  }
  c.restore();
 }
+function drawTravelSection(section,fraction,settled){
+ const pts=section.points,c=ctx;
+ if(!pts.length)return null;
+ const segments=[];let total=0;
+ for(let i=1;i<pts.length;i++){
+  const len=Math.hypot((pts[i].lon-pts[i-1].lon)*.7,pts[i].lat-pts[i-1].lat);
+  segments.push(len);total+=len;
+ }
+ let remaining=total*Math.max(0,Math.min(1,fraction));
+ const first=project(pts[0].lon,pts[0].lat);
+ let last={x:first.x,y:first.y,mode:section.mode,angle:0};
+ c.save();c.beginPath();c.moveTo(first.x,first.y);
+ for(let i=1;i<pts.length;i++){
+  if(remaining<=0)break;
+  const amount=segments[i-1]||.0001,t=Math.min(1,remaining/amount);
+  const lon=pts[i-1].lon+(pts[i].lon-pts[i-1].lon)*t;
+  const lat=pts[i-1].lat+(pts[i].lat-pts[i-1].lat)*t;
+  const p=project(lon,lat),a=project(pts[i-1].lon,pts[i-1].lat);
+  c.lineTo(p.x,p.y);
+  last={x:p.x,y:p.y,mode:section.mode,angle:Math.atan2(p.y-a.y,p.x-a.x)};
+  remaining-=amount;
+  if(t<1)break;
+ }
+ c.strokeStyle=section.mode==='ship'?(settled?'#43788b99':'#397f99'):(settled?'#795335aa':'#8a5e32');
+ c.lineWidth=settled?2.1:3.2;
+ c.lineCap='round';c.lineJoin='round';c.setLineDash(section.mode==='ship'?[4,7]:[7,4]);
+ c.stroke();c.restore();
+ return last;
+}
+function drawTravelPath(route,fraction=1,settled=false){
+ const sections=route.sections||[];
+ const lengths=sections.map(s=>s.points.slice(1).reduce((sum,p,i)=>sum+Math.hypot((p.lon-s.points[i].lon)*.7,p.lat-s.points[i].lat),0));
+ const total=lengths.reduce((a,b)=>a+b,0);
+ let remaining=total*Math.max(0,Math.min(1,fraction)),position=null;
+ for(let i=0;i<sections.length;i++){
+  if(remaining<=0&&position)break;
+  const length=lengths[i];
+  const amount=length?Math.min(1,remaining/length):1;
+  position=drawTravelSection(sections[i],amount,settled)||position;
+  remaining-=length;
+ }
+ return position;
+}
+function drawShip(x,y,angle){
+ const c=ctx;c.save();c.translate(x,y);c.rotate(angle);c.fillStyle='#2f7082';c.strokeStyle='#f6ead1';c.lineWidth=1.6;
+ c.beginPath();c.arc(0,0,15,0,Math.PI*2);c.fill();c.stroke();
+ c.fillStyle='#f6ead1';c.beginPath();c.moveTo(-9,1);c.lineTo(10,1);c.lineTo(6,7);c.lineTo(-5,7);c.closePath();c.fill();
+ c.fillRect(-3,-6,7,6);c.beginPath();c.moveTo(0,-9);c.lineTo(0,-2);c.lineTo(8,-2);c.closePath();c.fill();
+ c.restore();
+}
 function drawRoute(){
  if(state.phase==='explore')return;
- const c=ctx,route=state.visited.map(id=>CITIES[id]);
- for(let i=1;i<route.length;i++){
-   const a=project(route[i-1].lon,route[i-1].lat),b=project(route[i].lon,route[i].lat);
-   c.beginPath();c.moveTo(a.x,a.y);c.lineTo(b.x,b.y);c.strokeStyle='#795335';c.lineWidth=2.2;c.setLineDash([5,5]);c.stroke();c.setLineDash([]);
+ for(let i=1;i<state.visited.length;i++){
+  drawTravelPath(journeyRoute(state.visited[i-1],state.visited[i]),1,true);
  }
- if(state.transit){const {fromId,toId,progress}=state.transit,a=CITIES[fromId],b=CITIES[toId],p=project(a.lon,a.lat),q=project(b.lon,b.lat);
-   c.beginPath();c.moveTo(p.x,p.y);c.lineTo(p.x+(q.x-p.x)*progress,p.y+(q.y-p.y)*progress);
-   c.strokeStyle='#9f6d3d';c.lineWidth=2.3;c.setLineDash([4,4]);c.stroke();c.setLineDash([]);
-   drawTrain(p.x+(q.x-p.x)*progress,p.y+(q.y-p.y)*progress);
+ if(state.transit){
+  const {fromId,toId,progress}=state.transit;
+  const route=journeyRoute(fromId,toId);
+  const p=drawTravelPath(route,progress,false);
+  if(p){if(p.mode==='ship')drawShip(p.x,p.y,p.angle);else drawTrain(p.x,p.y);}
  }else{
-   const current=CITIES[state.currentCity];const p=project(current.lon,current.lat);
-   drawPin(p.x,p.y,'✦',true);
+  const current=CITIES[state.currentCity],p=project(current.lon,current.lat);
+  drawPin(p.x,p.y,'✦',true);
  }
  if(state.phase==='question'&&currentQuestion().type==='city'||state.phase==='feedback'&&currentQuestion().type==='city')drawCityCandidates();
  if(state.phase==='feedback'&&currentQuestion().type==='country')drawCountryHighlight();
