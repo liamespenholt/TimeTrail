@@ -13,3 +13,36 @@
 /* Historical capital overlay: the player's present country is always readable. */
 .current-country-banner{padding:10px 22px;background:#e8d7b5;border-bottom:1px solid #baa482;color:#62472e;font:700 11px/1.5 'DM Sans',sans-serif;letter-spacing:1.35px;overflow-wrap:anywhere}
 @media(max-width:520px){.current-country-banner{padding:9px 13px;font-size:10px;letter-spacing:.8px}}
+
+/* TimeTrail v0.4 — map experience and refreshed journal */
+:root{--focus-gold:#8a6037;--leaf:#486e5b}
+.site-header{height:94px}
+.intro{padding:46px 0 34px}
+.atlas-frame,.journal{border-color:#aa9471;box-shadow:0 22px 52px #5a412522,0 2px 7px #5a41251a}
+.atlas-toolbar{background:linear-gradient(90deg,#eee2c5,#e5d4b0)}
+.map-viewport{background:#d3c9a9}
+.map-help{position:absolute;top:13px;left:15px;z-index:2;background:#f4e9d8d9;color:#69583e;border:1px solid #a99674a6;border-radius:4px;padding:7px 10px;font:700 9px 'DM Sans',sans-serif;letter-spacing:.85px;pointer-events:none}
+.map-viewport:focus-within{outline:2px solid var(--focus-gold);outline-offset:-2px}
+.journal{background:linear-gradient(150deg,#f8eed8,#ecddbb 70%,#e6d1aa)}
+.journal-kicker{color:#7a5537}
+.challenge-kind{font-size:10px;font-weight:800;letter-spacing:1.65px;color:#8c6843;margin:14px 0 7px}
+.question-text{line-height:1.35}
+.progress-track{overflow:hidden}
+.progress-fill,.travel-progress-fill{transition:width .35s ease}
+.travel-progress-track{height:7px;border-radius:7px;overflow:hidden;background:#d5c09a;margin:20px 0 16px;border:1px solid #b69d76}
+.travel-progress-fill{display:block;background:linear-gradient(90deg,#927042,#426e60);height:100%;border-radius:7px}
+.city-choice{border-radius:4px;box-shadow:0 2px 0 #a28a67;transition:transform .12s ease,background .12s ease}
+.city-choice:hover:not(:disabled){transform:translateY(-2px)}
+.city-choice-wrong{background:#e7c3ad!important;color:#855344!important;border-color:#b37861!important;text-decoration:line-through}
+.answer-feedback{border-radius:5px;border-left:4px solid var(--leaf);box-shadow:0 4px 15px #5d4b2e10}
+.answer-feedback.wrong{border-left-color:#a65d4b}
+.score-breakdown{display:grid;gap:0;margin:12px 0 15px;border-top:1px solid #b7a382;border-bottom:1px solid #b7a382}
+.score-breakdown-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 3px;font-size:12px;color:#58472f}
+.score-breakdown-row+ .score-breakdown-row{border-top:1px dashed #c0ac8b}
+.score-breakdown-row strong{font-variant-numeric:tabular-nums;color:#786040}
+.answer-option{transition:transform .12s ease,background .12s ease}
+.answer-option:hover:not(:disabled){transform:translateX(3px)}
+.button-primary{transition:transform .15s ease,filter .15s ease}
+.button-primary:hover{transform:translateY(-2px);filter:brightness(1.06)}
+@media(max-width:720px){.map-help{top:auto;bottom:53px;left:12px;padding:5px 7px;font-size:8px}.intro{padding:32px 0 25px}.atlas-toolbar{padding:12px}.map-viewport{min-height:360px}}
+@media(prefers-reduced-motion:reduce){.progress-fill,.travel-progress-fill,.button-primary,.answer-option,.city-choice{transition:none!important}}
