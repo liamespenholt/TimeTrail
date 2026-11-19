@@ -16,5 +16,6 @@ jobs:
         run: |
           node --check app.js
           node --check content.js
+          node --check travel-routes.js
       - name: Test question bank, routes and gameplay
         run: node --test tests/*.test.cjs
