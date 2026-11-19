@@ -104,13 +104,6 @@ const TINTS=['#cec19b','#d1c29b','#c1c19f','#d4c9ab','#b4b99f','#d2bea0','#c7b59
 const CAPITALS_1900=['stockholm','kristiania','berlin','vienna','budapest','constantinople',
  'athens','rome','bucharest','belgrade','copenhagen','st_petersburg','london',
  'amsterdam','brussels','paris','lisbon','madrid','sofia','bern'];
-const LABELS_1900=[
- ['ATLANTIC OCEAN',-12,49,13,'italic'],['NORTH SEA',2,58,11,'italic'],['MEDITERRANEAN',16,35,12,'italic'],
- ['SWEDEN–NORWAY',14,65,11],['GERMAN EMPIRE',10.6,52.1,11],['AUSTRIA–HUNGARY',17,47.7,10],
- ['RUSSIAN EMPIRE',38,58.5,12],['OTTOMAN EMPIRE',34,40,10],['FRANCE',1.6,46.7,11],
- ['GREAT BRITAIN',-2.5,54.4,10],['ITALY',12.8,43.2,10],['SPAIN',-4.5,40.5,10],
- ['GREECE',22.2,38.6,9],['DENMARK',9.5,57.8,9],['SWITZERLAND',8.0,46.4,8],['SERBIA',20.6,44.6,8]
-];
 function pointInBBox(b){return b.maxx>=VIEW.west&&b.minx<=VIEW.east&&b.maxy>=VIEW.south&&b.miny<=VIEW.north;}
 function ringBBox(r){let minx=Infinity,miny=Infinity,maxx=-Infinity,maxy=-Infinity;for(const p of r){if(p[0]<minx)minx=p[0];if(p[0]>maxx)maxx=p[0];if(p[1]<miny)miny=p[1];if(p[1]>maxy)maxy=p[1];}return {minx,miny,maxx,maxy};}
 function reduceRing(r){if(r.length<30)return r;const keep=[r[0]];let p=r[0];for(let i=1;i<r.length-1;i++){const n=r[i];if(Math.abs(n[0]-p[0])+Math.abs(n[1]-p[1])>.07){keep.push(n);p=n;}}keep.push(r[r.length-1]);return keep.length>=4?keep:r;}
@@ -185,21 +178,12 @@ function renderBase(){
  for(let lon=-20;lon<=55;lon+=5){const a=project(lon,20),e=project(lon,85);b.beginPath();b.moveTo(a.x,a.y);b.lineTo(e.x,e.y);b.stroke();}
  for(let lat=30;lat<=80;lat+=5){const a=project(-25,lat),e=project(65,lat);b.beginPath();b.moveTo(a.x,a.y);b.lineTo(e.x,e.y);b.stroke();}
  for(const f of mapState.features){b.beginPath();for(const rings of f.pieces){for(const ring of rings){if(ring.length>=3)ringPath(b,ring);}}b.fillStyle=f.tint;b.fill('evenodd');b.lineJoin='round';b.strokeStyle='#716b50ad';b.lineWidth=.7;b.stroke();}
- // Never reveal labels during an active unresolved navigation challenge.
- const showNames=['explore','results','feedback','arrival'].includes(state.phase);
- if(showNames&&state.year===1900){for(const [label,lon,lat,sz,variant] of LABELS_1900){
-   if(w<600&&!['SWEDEN–NORWAY','GERMAN EMPIRE','AUSTRIA–HUNGARY','RUSSIAN EMPIRE','OTTOMAN EMPIRE'].includes(label))continue;
-   const p=project(lon,lat);if(p.x<8||p.x>w-8||p.y<10||p.y>h-12)continue;
-   b.save();b.font=`${variant==='italic'?'italic ':'600 '}${w<600?Math.max(7,sz-2):sz}px Georgia,serif`;
-   b.textAlign='center';b.textBaseline='middle';b.fillStyle=variant==='italic'?'#747b70a8':'#554b38b8';b.fillText(label,p.x,p.y);b.restore();
- }}
  b.strokeStyle='#a58c605c';b.lineWidth=1;b.strokeRect(8,8,w-16,h-16);mapState.needsBase=false;
 }
 function drawCapitals(){
- // Only 1900 has a curated historical capital list; avoid placing 1900 labels on other years.
+ // Only 1900 has a curated historical capital list; other years show no capital stars.
  if(state.year!==1900)return;
  const c=ctx,w=mapState.w,h=mapState.h;
- const showLabels=!(state.phase==='question'&&isNavigation());
  c.save();
  for(const id of CAPITALS_1900){
   const city=CITIES[id],p=project(city.lon,city.lat);
@@ -212,16 +196,6 @@ function drawCapitals(){
    else c.lineTo(p.x+Math.cos(a)*r,p.y+Math.sin(a)*r);
   }
   c.closePath();c.fillStyle='#705131';c.strokeStyle='#fff1c9';c.lineWidth=1.5;c.fill();c.stroke();
-  if(showLabels){
-   const active=state.currentCity===id;
-   // Label at higher zoom or on roomy screens; keep small screens legible.
-   if(!active&&w<600&&mapState.zoom<1.35)continue;
-   c.font=`${active?'bold ':''}${w<600?10:11}px Georgia,serif`;
-   c.textAlign='left';c.textBaseline='middle';c.lineWidth=3;
-   c.strokeStyle='#f3e6c8';c.fillStyle='#4c3b29';
-   c.strokeText(city.name,p.x+outer+4,p.y-outer-2);
-   c.fillText(city.name,p.x+outer+4,p.y-outer-2);
-  }
  }
  c.restore();
 }
