@@ -7,6 +7,10 @@ const HISTORICAL_YEARS = [1800, 1880, 1900, 1914, 1938, 1945, 2000];
 // Content is loaded before app.js and is shared with Node's content tests.
 if (typeof TIMETRAIL_CONTENT === 'undefined') throw new Error('Historical question pack failed to load');
 const CONTENT = TIMETRAIL_CONTENT;
+if(typeof TIMETRAIL_ROUTES==='undefined')throw new Error('Historical travel routes failed to load');
+const TRAVEL = TIMETRAIL_ROUTES;
+const routeErrors=TRAVEL.validateJourneys();
+if(routeErrors.length)throw new Error('Invalid historical travel routes: '+routeErrors.join('; '));
 const CITIES = CONTENT.cities;
 const COUNTRIES = CONTENT.countriesByGeoName;
 const UTC_DAY = new Date().toISOString().slice(0,10);
@@ -42,7 +46,7 @@ function stopList(){return `<div class="destinations"><div class="destinations-h
   return `<div class="stop-row ${finished?'done':current?'current':''}"><span class="stop-index">${finished?'✓':String(i+1).padStart(2,'0')}</span><b>${visible?escapeHTML(CITIES[stop.city].name):'Undiscovered'}</b><small>${finished?`${state.results[i].points} PTS`:current?'IN PROGRESS':'· · ·'}</small></div>`;
 }).join('')}</div></div>`;}
 function homeMarkup(){const stored=readSaved();return `<div class="journal-kicker">DAILY HISTORICAL EXPEDITION · ${escapeHTML(UTC_DAY)}</div><h2>${escapeHTML(TOUR.title)}</h2><p class="journal-lead">${escapeHTML(TOUR.subtitle)}. Start in ${escapeHTML(CITIES[TOUR.start].name)}, uncover five historical destinations and earn up to 500 points.</p>${tourProgress()}${stopList()}<div class="button-spacer"><button class="button-primary" id="start-journey">${stored&&stored.phase!=='home'?'CONTINUE JOURNEY':'BEGIN EXPEDITION'} <span>→</span></button><div class="button-note">Ten curated routes rotate daily · All players get the same route · Replayable pilot</div></div>`;}
-function transitMarkup(){return `<div class="journal-kicker">CHAPTER ${state.stop+1} OF 5 · ON THE MOVE</div><div class="travel-icon" aria-hidden="true">✧</div><h2 class="travel-text">Next stop: <em>${escapeHTML(CITIES[state.transit.toId].name)}</em></h2><p class="travel-sub">Tracing a journey across the Europe of 1900.</p><div class="travel-progress-track" role="progressbar" aria-label="Travel animation"><span id="travel-progress-fill" class="travel-progress-fill" style="width:${Math.round(state.transit.progress*100)}%"></span></div>${stopList()}<div class="button-spacer"><button class="button-secondary skip-button" id="skip-travel">SKIP ANIMATION →</button><div class="button-note">The route is schematic, not a verified historical railway.</div></div>`;}
+function transitMarkup(){return `<div class="journal-kicker">CHAPTER ${state.stop+1} OF 5 · ON THE MOVE</div><div class="travel-icon" aria-hidden="true">✧</div><h2 class="travel-text">Next stop: <em>${escapeHTML(CITIES[state.transit.toId].name)}</em></h2><p class="travel-sub" id="travel-mode-label">${TRAVEL.pointAt(TRAVEL.routeFor(state.transit.fromId,state.transit.toId),state.transit.progress).mode==='sea'?'Sailing by boat':'Travelling by train'} · A schematic journey across Europe in 1900.</p><div class="travel-progress-track" role="progressbar" aria-label="Travel animation"><span id="travel-progress-fill" class="travel-progress-fill" style="width:${Math.round(state.transit.progress*100)}%"></span></div>${stopList()}<div class="button-spacer"><button class="button-secondary skip-button" id="skip-travel">SKIP ANIMATION →</button><div class="button-note">Train and boat routes are schematic, not verified historical timetables.</div></div>`;}
 function arrivalMarkup(){const city=CITIES[state.currentCity];return `<div class="journal-kicker">DESTINATION DISCOVERED · STOP ${state.stop+1}/5</div><div class="travel-icon">✦</div><h2>You have reached <em>${escapeHTML(city.name)}.</em></h2><p class="journal-lead">${escapeHTML(city.country)} · Year 1900</p>${stopList()}<div class="button-spacer"><button class="button-primary" id="next-stop">${state.stop===4?'SEE YOUR RESULTS':'CONTINUE EXPEDITION'} →</button></div>`;}
 function questionMarkup(){
   const q=currentQuestion(), isNav=isNavigation(q), city=CITIES[state.currentCity], remaining=3-state.attempts;
@@ -82,7 +86,7 @@ function restoreGame(){const s=readSaved();if(!s){startJourney();return;}travelT
 function clearAttempt(){state.attempts=0;state.wrongIds=[];state.lastWrong='';state.chosen=null;state.feedback=null;}
 function startJourney(){travelToken++;Object.assign(state,{phase:'home',year:1900,stop:0,currentCity:TOUR.start,visited:[TOUR.start],score:0,results:[],transit:null});clearAttempt();resetMap();loadMap(1900);enterStop();}
 function enterStop(){clearAttempt();const q=currentQuestion();if(q.type==='country'&&CITIES[state.currentCity].countryId===q.targetId)throw Error('Invalid tour: country target equals current country');if(q.type==='city'&&state.currentCity===q.targetId)throw Error('Invalid tour: city target equals current city');if(q.type==='choice'){startTravel(q.city,'question');return;}state.phase='question';if(q.type==='city')focusCityCandidates();else resetMap();saveGame();renderJournal();}
-function startTravel(toId,nextPhase){if(!CITIES[toId])return;travelToken++;const token=travelToken;state.phase='travel';state.transit={fromId:state.currentCity,toId,progress:0,nextPhase};resetMap();saveGame();renderJournal();const duration=window.matchMedia('(prefers-reduced-motion: reduce)').matches?30:1450,start=performance.now();function tick(t){if(token!==travelToken||state.phase!=='travel')return;state.transit.progress=Math.min(1,(t-start)/duration);const progressBar=$('travel-progress-fill');if(progressBar)progressBar.style.width=`${Math.round(state.transit.progress*100)}%`;scheduleDraw();if(state.transit.progress>=1)finishTransit();else requestAnimationFrame(tick);}requestAnimationFrame(tick);}
+function startTravel(toId,nextPhase){if(!CITIES[toId])return;travelToken++;const token=travelToken;state.phase='travel';state.transit={fromId:state.currentCity,toId,progress:0,nextPhase};resetMap();saveGame();renderJournal();const duration=window.matchMedia('(prefers-reduced-motion: reduce)').matches?30:1450,start=performance.now();function tick(t){if(token!==travelToken||state.phase!=='travel')return;state.transit.progress=Math.min(1,(t-start)/duration);const progressBar=$('travel-progress-fill');if(progressBar)progressBar.style.width=`${Math.round(state.transit.progress*100)}%`;const modeLabel=$('travel-mode-label');if(modeLabel){const position=TRAVEL.pointAt(TRAVEL.routeFor(state.transit.fromId,state.transit.toId),state.transit.progress);modeLabel.textContent=position.mode==='sea'?'Sailing by boat · A schematic sea crossing.':'Travelling by train · A schematic land journey.';}scheduleDraw();if(state.transit.progress>=1)finishTransit();else requestAnimationFrame(tick);}requestAnimationFrame(tick);}
 function finishTransit(){if(state.phase!=='travel'||!state.transit)return;travelToken++;const {toId,nextPhase}=state.transit;state.currentCity=toId;state.visited=[...new Set([...state.visited,toId])];state.transit=null;state.phase=nextPhase;if(nextPhase==='results')state.stop=4;saveGame();resetMap();renderJournal();}
 function chooseAnswer(i){const q=currentQuestion();if(state.phase!=='question'||q.type!=='choice'||!Number.isInteger(i)||i<0||i>=q.options.length)return;state.chosen=i;completeAnswer(i===q.correct?100:0);}
 function guessCountry(feature){const q=currentQuestion();if(state.phase!=='question'||q.type!=='country'||!feature?.name||!mapState.features.length)return;const id=feature.id||feature.name;if(state.wrongIds.includes(id))return;if(id===q.targetId){state.attempts++;completeAnswer([100,60,30][Math.min(2,state.attempts-1)]);return;}registerWrong(id,feature.displayName||feature.name);}
@@ -208,22 +212,54 @@ function drawCapitals(){
  }
  c.restore();
 }
+function segmentDistance(a,b){
+ const lat=(a.lat+b.lat)*Math.PI/360;
+ return Math.hypot((b.lon-a.lon)*Math.cos(lat),b.lat-a.lat);
+}
+function drawTravelSections(sections,progress=1,opacity=1){
+ const c=ctx,total=TRAVEL.routeLength(sections),cutoff=total*Math.max(0,Math.min(1,progress));
+ let travelled=0;
+ c.save();c.globalAlpha=opacity;c.lineWidth=3;c.lineCap='round';c.lineJoin='round';
+ for(const section of sections){
+  const sea=section.mode==='sea';
+  c.strokeStyle=sea?'#39768a':'#815e38';
+  c.setLineDash(sea?[3,6]:[5,4]);
+  c.beginPath();
+  for(let i=1;i<section.points.length;i++){
+   const a=section.points[i-1],b=section.points[i],len=segmentDistance(a,b);
+   if(travelled>=cutoff)break;
+   const fraction=len?Math.min(1,Math.max(0,(cutoff-travelled)/len)):1;
+   const p=project(a.lon,a.lat),q=project(a.lon+(b.lon-a.lon)*fraction,a.lat+(b.lat-a.lat)*fraction);
+   c.moveTo(p.x,p.y);c.lineTo(q.x,q.y);
+   travelled+=len;
+  }
+  c.stroke();
+ }
+ c.setLineDash([]);c.restore();
+}
+function drawShip(x,y){
+ const c=ctx;c.save();c.translate(x,y);
+ c.beginPath();c.arc(0,0,19,0,Math.PI*2);c.fillStyle='#f3e4c5';c.fill();c.strokeStyle='#39768a';c.lineWidth=2;c.stroke();
+ c.fillStyle='#326b7a';c.beginPath();c.moveTo(-14,3);c.lineTo(14,3);c.lineTo(9,11);c.lineTo(-8,11);c.closePath();c.fill();
+ c.fillStyle='#326b7a';c.fillRect(-7,-4,15,7);c.fillRect(1,-10,5,7);
+ c.fillStyle='#f3e4c5';c.fillRect(3,-8,2,3);c.restore();
+}
 function drawRoute(){
  if(state.phase==='explore')return;
- const c=ctx,route=state.visited.map(id=>CITIES[id]);
- for(let i=1;i<route.length;i++){
-   const a=project(route[i-1].lon,route[i-1].lat),b=project(route[i].lon,route[i].lat);
-   c.beginPath();c.moveTo(a.x,a.y);c.lineTo(b.x,b.y);c.strokeStyle='#795335';c.lineWidth=2.2;c.setLineDash([5,5]);c.stroke();c.setLineDash([]);
- }
- if(state.transit){const {fromId,toId,progress}=state.transit,a=CITIES[fromId],b=CITIES[toId],p=project(a.lon,a.lat),q=project(b.lon,b.lat);
-   c.beginPath();c.moveTo(p.x,p.y);c.lineTo(p.x+(q.x-p.x)*progress,p.y+(q.y-p.y)*progress);
-   c.strokeStyle='#9f6d3d';c.lineWidth=3.2;c.setLineDash([5,6]);c.stroke();c.setLineDash([]);
-   drawTrain(p.x+(q.x-p.x)*progress,p.y+(q.y-p.y)*progress);
+ const visited=state.visited;
+ for(let i=1;i<visited.length;i++)drawTravelSections(TRAVEL.routeFor(visited[i-1],visited[i]),1,.72);
+ if(state.transit){
+  const {fromId,toId,progress}=state.transit;
+  const sections=TRAVEL.routeFor(fromId,toId);
+  drawTravelSections(sections,progress,1);
+  const vehicle=TRAVEL.pointAt(sections,progress),p=project(vehicle.lon,vehicle.lat);
+  if(vehicle.mode==='sea')drawShip(p.x,p.y);
+  else drawTrain(p.x,p.y);
  }else{
-   const current=CITIES[state.currentCity];const p=project(current.lon,current.lat);
-   drawPin(p.x,p.y,'✦',true);
+  const current=CITIES[state.currentCity],p=project(current.lon,current.lat);
+  drawPin(p.x,p.y,'✦',true);
  }
- if(state.phase==='question'&&currentQuestion().type==='city'||state.phase==='feedback'&&currentQuestion().type==='city')drawCityCandidates();
+ if((state.phase==='question'||state.phase==='feedback')&&currentQuestion().type==='city')drawCityCandidates();
  if(state.phase==='feedback'&&currentQuestion().type==='country')drawCountryHighlight();
 }
 function drawCountryHighlight(){const id=currentQuestion().targetId,c=ctx;
