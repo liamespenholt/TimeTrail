@@ -10,3 +10,6 @@
 .question-actions .button-secondary{width:100%}
 .skip-button{width:100%}
 @media(max-width:520px){.city-choice{min-height:48px}}
+/* Historical capital overlay: the player's present country is always readable. */
+.current-country-banner{padding:10px 22px;background:#e8d7b5;border-bottom:1px solid #baa482;color:#62472e;font:700 11px/1.5 'DM Sans',sans-serif;letter-spacing:1.35px;overflow-wrap:anywhere}
+@media(max-width:520px){.current-country-banner{padding:9px 13px;font-size:10px;letter-spacing:.8px}}
