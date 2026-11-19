@@ -58,8 +58,9 @@ test('route interpolation and reverse route are reliable',()=>{
  assert.throws(()=>routes.routeFor('berlin','berlin'),/Missing curated route/);
 });
 test('browser loads travel routes before game engine and changes vehicle on water',()=>{
- assert.ok(html.indexOf('content.js?v=0.4.1')<html.indexOf('travel-routes.js?v=0.4.1'));
- assert.ok(html.indexOf('travel-routes.js?v=0.4.1')<html.indexOf('app.js?v=0.4.1'));
+ const scripts=['content.js','travel-routes.js','app.js'].map(name=>html.search(new RegExp(name.replace('.', '\\.')+'\\?v=0\\.4\\.\\d+')));
+ assert.ok(scripts.every(index=>index>=0),'all scripts should retain versioned URLs');
+ assert.ok(scripts[0]<scripts[1]&&scripts[1]<scripts[2],'content, routes and app must load in order');
  assert.match(app,/function drawShip\(/);
  assert.match(app,/vehicle\.mode==='sea'\)drawShip/);
  assert.match(app,/TRAVEL\.routeFor\(visited\[i-1\],visited\[i\]\)/);
