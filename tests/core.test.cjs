@@ -6,6 +6,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const code=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
 const contentCode=fs.readFileSync(path.join(__dirname,'..','content.js'),'utf8');
+const routesCode=fs.readFileSync(path.join(__dirname,'..','travel-routes.js'),'utf8');
 class FixedDate extends Date{constructor(...args){super(...(args.length?args:['2026-11-18T12:00:00Z']));}static now(){return Date.parse('2026-11-18T12:00:00Z');}}
 const rect=(name,x1,y1,x2,y2)=>({type:'Feature',properties:{NAME:name,SUBJECTO:name},geometry:{type:'Polygon',coordinates:[[[x1,y1],[x2,y1],[x2,y2],[x1,y2],[x1,y1]]]}});
 const fixture={type:'FeatureCollection',features:[rect('Germany',6,47,16,55),rect('Italy',8,36,19,45),rect('Sweden–Norway',5,55,30,70),rect('Austria Hungary',13,45,25,50),rect('Ottoman Empire',27,37,40,43),rect('Greece',20,35,26,40),rect('France',-2,44,5,52)]};
@@ -21,6 +22,7 @@ const window={devicePixelRatio:1,isSecureContext:false,matchMedia:()=>({matches:
 const context=vm.createContext({document,window,console,Date:FixedDate,Intl,Math,JSON,Map,Set,Number,String,Array,Promise,location:{href:'https://example.org/TimeTrail'},navigator:{},prompt:noop,performance:{now:()=>0},requestAnimationFrame:noop,localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)},fetch:async()=>({ok:true,json:async()=>fixture})});
 async function run(){
 vm.runInContext(contentCode,context,{filename:'content.js'});
+vm.runInContext(routesCode,context,{filename:'travel-routes.js'});
 vm.runInContext(code,context,{filename:'app.js'});
 const evalJs=s=>vm.runInContext(s,context);
 await new Promise(resolve=>setImmediate(resolve));
