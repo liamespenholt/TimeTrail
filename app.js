@@ -1,4 +1,4 @@
-/* TimeTrail v0.3 – curated daily journeys (English UI).
+/* TimeTrail v0.4 – curated daily journeys (English UI).
    Historical boundaries: aourednik/historical-basemaps (GPL-3.0).
    Animated lines are schematic travel routes, not verified 1900 railways. */
 'use strict';
@@ -19,7 +19,7 @@ const formattedDate=new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short'
 $('header-date').textContent=formattedDate.toUpperCase();
 let travelToken=0;
 const state={phase:'home',year:1900,stop:0,currentCity:TOUR.start,visited:[TOUR.start],score:0,results:[],attempts:0,wrongIds:[],lastWrong:'',chosen:null,feedback:null,transit:null,hover:null,loading:false};
-const mapState={w:0,h:0,dpr:1,zoom:1,panX:0,panY:0,cache:null,data:null,features:[],requestId:0,drag:null,needsBase:true};
+const mapState={w:0,h:0,dpr:1,zoom:1,panX:0,panY:0,cache:null,data:null,features:[],requestId:0,drag:null,pointers:new Map(),pinch:null,needsBase:true};
 const yearCache=new Map();
 
 function escapeHTML(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
@@ -42,22 +42,22 @@ function stopList(){return `<div class="destinations"><div class="destinations-h
   return `<div class="stop-row ${finished?'done':current?'current':''}"><span class="stop-index">${finished?'✓':String(i+1).padStart(2,'0')}</span><b>${visible?escapeHTML(CITIES[stop.city].name):'Undiscovered'}</b><small>${finished?`${state.results[i].points} PTS`:current?'IN PROGRESS':'· · ·'}</small></div>`;
 }).join('')}</div></div>`;}
 function homeMarkup(){const stored=readSaved();return `<div class="journal-kicker">DAILY HISTORICAL EXPEDITION · ${escapeHTML(UTC_DAY)}</div><h2>${escapeHTML(TOUR.title)}</h2><p class="journal-lead">${escapeHTML(TOUR.subtitle)}. Start in ${escapeHTML(CITIES[TOUR.start].name)}, uncover five historical destinations and earn up to 500 points.</p>${tourProgress()}${stopList()}<div class="button-spacer"><button class="button-primary" id="start-journey">${stored&&stored.phase!=='home'?'CONTINUE JOURNEY':'BEGIN EXPEDITION'} <span>→</span></button><div class="button-note">Ten curated routes rotate daily · All players get the same route · Replayable pilot</div></div>`;}
-function transitMarkup(){return `<div class="journal-kicker">LEG ${state.stop+1} / 5</div><div class="travel-icon">♧</div><h2 class="travel-text">Travelling to ${escapeHTML(CITIES[state.transit.toId].name)}…</h2><p class="travel-sub">Following an illustrated route across historical Europe.</p>${stopList()}<div class="button-spacer"><button class="button-secondary skip-button" id="skip-travel">SKIP ANIMATION →</button><div class="button-note">The route is schematic, not a verified historical railway.</div></div>`;}
-function arrivalMarkup(){const city=CITIES[state.currentCity];return `<div class="journal-kicker">DESTINATION DISCOVERED</div><div class="travel-icon">✦</div><h2>You have reached <em>${escapeHTML(city.name)}.</em></h2><p class="journal-lead">${escapeHTML(city.country)} · Year 1900</p>${stopList()}<div class="button-spacer"><button class="button-primary" id="next-stop">${state.stop===4?'SEE YOUR RESULTS':'CONTINUE EXPEDITION'} →</button></div>`;}
+function transitMarkup(){return `<div class="journal-kicker">CHAPTER ${state.stop+1} OF 5 · ON THE MOVE</div><div class="travel-icon" aria-hidden="true">✧</div><h2 class="travel-text">Next stop: <em>${escapeHTML(CITIES[state.transit.toId].name)}</em></h2><p class="travel-sub">Tracing a journey across the Europe of 1900.</p><div class="travel-progress-track" role="progressbar" aria-label="Travel animation"><span id="travel-progress-fill" class="travel-progress-fill" style="width:${Math.round(state.transit.progress*100)}%"></span></div>${stopList()}<div class="button-spacer"><button class="button-secondary skip-button" id="skip-travel">SKIP ANIMATION →</button><div class="button-note">The route is schematic, not a verified historical railway.</div></div>`;}
+function arrivalMarkup(){const city=CITIES[state.currentCity];return `<div class="journal-kicker">DESTINATION DISCOVERED · STOP ${state.stop+1}/5</div><div class="travel-icon">✦</div><h2>You have reached <em>${escapeHTML(city.name)}.</em></h2><p class="journal-lead">${escapeHTML(city.country)} · Year 1900</p>${stopList()}<div class="button-spacer"><button class="button-primary" id="next-stop">${state.stop===4?'SEE YOUR RESULTS':'CONTINUE EXPEDITION'} →</button></div>`;}
 function questionMarkup(){
   const q=currentQuestion(), isNav=isNavigation(q), city=CITIES[state.currentCity], remaining=3-state.attempts;
   const options=q.type==='choice'?`<div class="options">${q.options.map((opt,i)=>{
     let status=state.phase==='feedback'?(i===q.correct?' correct':i===state.chosen?' wrong':''):'';
     return `<button type="button" class="answer-option${status}" data-answer="${i}" ${state.phase!=='question'?'disabled':''}><span class="letter">${'ABCD'[i]}</span><span>${escapeHTML(opt)}</span><span class="answer-state">${state.phase==='feedback'&&i===q.correct?'✓':state.phase==='feedback'&&i===state.chosen?'×':''}</span></button>`;
-  }).join('')}</div>`:q.type==='country'?`<div class="map-action-prompt">◎ Select the correct territory on the map. Country labels are hidden.</div>`:`<div class="map-action-prompt">◎ Select the correct city marker on the map. Names are hidden.</div><div class="city-selection" aria-label="Choose a city marker">${q.candidates.map((id,i)=>`<button type="button" data-city-choice="${id}" ${state.phase!=='question'||!mapState.features.length?'disabled':''} class="city-choice" aria-label="Choose marker ${'ABCDE'[i]}">${'ABCDE'[i]}</button>`).join('')}</div>`;
-  const scoreLine=`<div class="quiz-top"><span class="stop-tag">STOP ${String(state.stop+1).padStart(2,'0')} / 05 · ${q.difficulty.toUpperCase()}</span><span class="point-tag">${state.score} / 500 PTS</span></div><div class="progress-track"><div class="progress-fill" style="width:${(state.stop+1)*20}%"></div></div>`;
+  }).join('')}</div>`:q.type==='country'?`<div class="map-action-prompt">◎ Select the correct territory on the map. Country labels are hidden.</div>`:`<div class="map-action-prompt">◎ Select the correct city marker on the map. Names are hidden.</div><div class="city-selection" aria-label="Choose a city marker">${q.candidates.map((id,i)=>`<button type="button" data-city-choice="${id}" ${state.phase!=='question'||!mapState.features.length?'disabled':''} class="city-choice${state.wrongIds.includes(id)?' city-choice-wrong':''}" aria-label="Choose marker ${'ABCDE'[i]}${state.wrongIds.includes(id)?', already tried':''}">${'ABCDE'[i]}</button>`).join('')}</div>`;
+  const scoreLine=`<div class="quiz-top"><span class="stop-tag">STOP ${String(state.stop+1).padStart(2,'0')} / 05 · ${q.difficulty.toUpperCase()}</span><span class="point-tag">${state.score} / 500 PTS</span></div><div class="progress-track" role="progressbar" aria-label="Expedition progress" aria-valuemin="0" aria-valuemax="5" aria-valuenow="${state.results.length}"><div class="progress-fill" style="width:${state.results.length*20}%"></div></div><div class="challenge-kind">${q.type==='country'?'◈ FIND THE HISTORICAL COUNTRY':q.type==='city'?'⌖ LOCATE THE CITY':'✦ HISTORY QUESTION'}</div>`;
   const isAnswered=state.phase==='feedback';
   const answerLocation=isAnswered?`<div class="location-line">✦ ${escapeHTML(CITIES[q.city].name.toUpperCase())} · ${escapeHTML(CITIES[q.city].country.toUpperCase())}</div>`:`<div class="location-line">✦ CURRENT LOCATION · ${escapeHTML(city.name.toUpperCase())}</div>`;
-  const response=isAnswered?`<div class="answer-feedback ${state.feedback.points===0?'wrong':''}"><strong>${state.feedback.points?`✓ ${state.feedback.points} points earned`:'0 points · Answer revealed'}</strong>${isNav?`<p><b>Answer: ${escapeHTML(q.type==='city'?CITIES[q.targetId].name:COUNTRY_DISPLAY[q.targetId])}</b></p>`:''}<p>${escapeHTML(q.fact)}</p><a href="${escapeHTML(q.source)}" rel="noopener noreferrer" target="_blank">Historical reference ↗</a></div>`:state.lastWrong?`<div class="map-click-feedback">Not quite: ${escapeHTML(state.lastWrong)}. ${remaining} ${remaining===1?'attempt':'attempts'} remaining.</div>`:'';
+  const response=isAnswered?`<div class="answer-feedback ${state.feedback.points===0?'wrong':''}" role="status"><strong>${state.feedback.points?`✓ ${state.feedback.points} points earned`:'0 points · Answer revealed'}</strong><p><b>Answer: ${escapeHTML(state.feedback.correct)}</b></p><p>${escapeHTML(q.fact)}</p><a href="${escapeHTML(q.source)}" rel="noopener noreferrer" target="_blank">Historical reference ↗</a></div>`:state.lastWrong?`<div class="map-click-feedback">Not quite: ${escapeHTML(state.lastWrong)}. ${remaining} ${remaining===1?'attempt':'attempts'} remaining.</div>`:'';
   const action=isAnswered?`<button class="button-primary" id="next-stop">${isNav?`TRAVEL TO ${escapeHTML(CITIES[q.city].name.toUpperCase())}`:state.stop===4?'VIEW RESULTS':'NEXT STOP'} →</button>`:`<div class="question-actions">${isNav?`<button class="button-secondary" id="reveal-answer">REVEAL ANSWER · 0 PTS</button>`:''}<p class="small-muted">${isNav?'Three attempts: 100 / 60 / 30 points. Repeat clicks on the same wrong answer do not count.':'One answer only: 100 points for a correct choice.'}</p></div>`;
   return `${scoreLine}${answerLocation}<h2 class="question-text">${escapeHTML(q.question)}</h2><p class="question-hint">${isNav?'Study the map carefully. Drag or zoom as needed.':'Choose the best answer from the four options below.'}</p>${options}${response}<div class="button-spacer">${action}</div>`;
 }
-function resultMarkup(){const blurb=state.score>=450?'Master explorer!':state.score>=300?'A skilled time traveller!':state.score>=150?'A promising explorer!':'Every expedition starts with curiosity.';return `<div class="journal-kicker">EXPEDITION COMPLETED</div><h2>Your journey is <em>complete.</em></h2><p class="journal-lead">${escapeHTML(TOUR.title)} · Five historic stops through Europe in 1900.</p><div class="ornament">✢</div><div class="score-total">${state.score} <span>/ 500</span></div><div class="result-icons" aria-label="Points earned for each stop">${medal(state.results)}</div><div class="result-banner"><strong>${blurb}</strong><small>${state.results.filter(r=>r.points>0).length} of 5 stops awarded points · ${escapeHTML(UTC_DAY)}</small></div><div class="stamps"><span class="stamp">EUROPE 1900</span><span class="stamp">5 DESTINATIONS</span></div><div class="result-buttons"><button class="button-primary" id="share-result">COPY RESULTS ↗</button><button class="button-secondary" id="replay">REPLAY PRACTICE JOURNEY</button></div>`;}
+function resultMarkup(){const blurb=state.score>=450?'Master explorer!':state.score>=300?'A skilled time traveller!':state.score>=150?'A promising explorer!':'Every expedition starts with curiosity.';return `<div class="journal-kicker">EXPEDITION COMPLETED</div><h2>Your journey is <em>complete.</em></h2><p class="journal-lead">${escapeHTML(TOUR.title)} · Five historic stops through Europe in 1900.</p><div class="ornament">✢</div><div class="score-total">${state.score} <span>/ 500</span></div><div class="result-icons" aria-label="Points earned for each stop">${medal(state.results)}</div><div class="result-banner"><strong>${blurb}</strong><small>${state.results.filter(r=>r.points>0).length} of 5 stops awarded points · ${escapeHTML(UTC_DAY)}</small></div><div class="score-breakdown" aria-label="Points by destination">${TOUR.stops.map((q,i)=>`<div class="score-breakdown-row"><span>${String(i+1).padStart(2,'0')} · ${escapeHTML(CITIES[q.city].name)}</span><strong>${state.results[i]?.points??0} pts</strong></div>`).join('')}</div><div class="stamps"><span class="stamp">EUROPE 1900</span><span class="stamp">5 DESTINATIONS</span></div><div class="result-buttons"><button class="button-primary" id="share-result">COPY RESULTS ↗</button><button class="button-secondary" id="replay">REPLAY PRACTICE JOURNEY</button></div>`;}
 function exploreMarkup(){const index=HISTORICAL_YEARS.indexOf(state.year);return `<div class="journal-kicker">THE HISTORICAL ATLAS</div><h2>A world <em>before ours.</em></h2><p class="journal-lead">Discover how Europe's borders and empires changed. Move between the available historical map years.</p><div class="explore-controls"><div class="year-row"><span class="overline">SELECT MAP YEAR</span><strong class="year-big" id="year-text">${state.year}</strong></div><input id="year-slider" aria-label="Select historical map year" type="range" min="0" max="${HISTORICAL_YEARS.length-1}" step="1" value="${index}"/><div class="year-range-labels"><span>1800</span><span>2000</span></div></div><div class="explore-notice"><b>About this map</b><br/>Boundaries come from historical GeoJSON data. These are selected snapshots; some boundaries and territorial claims are approximate or disputed.</div><div class="ornament">✢</div><p class="journal-lead">Daily expeditions currently use the 1900 map; ten curated chapters repeat until new content is released.</p><div class="button-spacer"><button class="button-primary" id="back-to-daily">RETURN TO EXPEDITION →</button></div>`;}
 const COUNTRY_DISPLAY=Object.fromEntries(Object.values(COUNTRIES).map(country=>[country.id,country.name]));
 
@@ -82,7 +82,7 @@ function restoreGame(){const s=readSaved();if(!s){startJourney();return;}travelT
 function clearAttempt(){state.attempts=0;state.wrongIds=[];state.lastWrong='';state.chosen=null;state.feedback=null;}
 function startJourney(){travelToken++;Object.assign(state,{phase:'home',year:1900,stop:0,currentCity:TOUR.start,visited:[TOUR.start],score:0,results:[],transit:null});clearAttempt();resetMap();loadMap(1900);enterStop();}
 function enterStop(){clearAttempt();const q=currentQuestion();if(q.type==='country'&&CITIES[state.currentCity].countryId===q.targetId)throw Error('Invalid tour: country target equals current country');if(q.type==='city'&&state.currentCity===q.targetId)throw Error('Invalid tour: city target equals current city');if(q.type==='choice'){startTravel(q.city,'question');return;}state.phase='question';if(q.type==='city')focusCityCandidates();else resetMap();saveGame();renderJournal();}
-function startTravel(toId,nextPhase){if(!CITIES[toId])return;travelToken++;const token=travelToken;state.phase='travel';state.transit={fromId:state.currentCity,toId,progress:0,nextPhase};resetMap();saveGame();renderJournal();const duration=window.matchMedia('(prefers-reduced-motion: reduce)').matches?30:1450,start=performance.now();function tick(t){if(token!==travelToken||state.phase!=='travel')return;state.transit.progress=Math.min(1,(t-start)/duration);scheduleDraw();if(state.transit.progress>=1)finishTransit();else requestAnimationFrame(tick);}requestAnimationFrame(tick);}
+function startTravel(toId,nextPhase){if(!CITIES[toId])return;travelToken++;const token=travelToken;state.phase='travel';state.transit={fromId:state.currentCity,toId,progress:0,nextPhase};resetMap();saveGame();renderJournal();const duration=window.matchMedia('(prefers-reduced-motion: reduce)').matches?30:1450,start=performance.now();function tick(t){if(token!==travelToken||state.phase!=='travel')return;state.transit.progress=Math.min(1,(t-start)/duration);const progressBar=$('travel-progress-fill');if(progressBar)progressBar.style.width=`${Math.round(state.transit.progress*100)}%`;scheduleDraw();if(state.transit.progress>=1)finishTransit();else requestAnimationFrame(tick);}requestAnimationFrame(tick);}
 function finishTransit(){if(state.phase!=='travel'||!state.transit)return;travelToken++;const {toId,nextPhase}=state.transit;state.currentCity=toId;state.visited=[...new Set([...state.visited,toId])];state.transit=null;state.phase=nextPhase;if(nextPhase==='results')state.stop=4;saveGame();resetMap();renderJournal();}
 function chooseAnswer(i){const q=currentQuestion();if(state.phase!=='question'||q.type!=='choice'||!Number.isInteger(i)||i<0||i>=q.options.length)return;state.chosen=i;completeAnswer(i===q.correct?100:0);}
 function guessCountry(feature){const q=currentQuestion();if(state.phase!=='question'||q.type!=='country'||!feature?.name||!mapState.features.length)return;const id=feature.id||feature.name;if(state.wrongIds.includes(id))return;if(id===q.targetId){state.attempts++;completeAnswer([100,60,30][Math.min(2,state.attempts-1)]);return;}registerWrong(id,feature.displayName||feature.name);}
@@ -141,6 +141,7 @@ async function loadMap(year){
    $('map-status').textContent='Map unavailable';$('map-error').hidden=false;renderJournal();}
 }
 function resetMap(){mapState.zoom=1;mapState.panX=0;mapState.panY=0;mapState.needsBase=true;scheduleDraw();}
+function resetViewForQuestion(){if(state.phase==='question'&&currentQuestion().type==='city')focusCityCandidates();else resetMap();}
 function focusCityCandidates(){
  if(!mapState.w||!mapState.h)return;
  const q=currentQuestion();if(!q||q.type!=='city')return;
@@ -156,8 +157,16 @@ function focusCityCandidates(){
  mapState.panY=-(53-centerLat)*scale;
  mapState.needsBase=true;scheduleDraw();
 }
-function changeZoom(delta){mapState.zoom=Math.max(.75,Math.min(5,mapState.zoom*delta));mapState.needsBase=true;scheduleDraw();}
-$('zoom-in').addEventListener('click',()=>changeZoom(1.22));$('zoom-out').addEventListener('click',()=>changeZoom(1/1.22));$('reset-map').addEventListener('click',resetMap);$('map-retry').addEventListener('click',()=>loadMap(state.year));
+function zoomAt(delta,x=mapState.w/2,y=mapState.h/2){
+ const geo=unproject(x,y),old=mapState.zoom;
+ mapState.zoom=Math.max(.75,Math.min(5,old*delta));
+ if(mapState.zoom===old)return;
+ const newPosition=project(geo.lon,geo.lat);
+ mapState.panX+=x-newPosition.x;mapState.panY+=y-newPosition.y;
+ mapState.needsBase=true;scheduleDraw();
+}
+function changeZoom(delta){zoomAt(delta);}
+$('zoom-in').addEventListener('click',()=>changeZoom(1.22));$('zoom-out').addEventListener('click',()=>changeZoom(1/1.22));$('reset-map').addEventListener('click',resetViewForQuestion);$('map-retry').addEventListener('click',()=>loadMap(state.year));
 function project(lon,lat){const s=Math.min(mapState.w/75,mapState.h/43)*mapState.zoom;return {x:mapState.w/2+(lon-18)*s+mapState.panX,y:mapState.h/2+(53-lat)*s+mapState.panY};}
 function unproject(x,y){const s=Math.min(mapState.w/75,mapState.h/43)*mapState.zoom;return {lon:(x-mapState.w/2-mapState.panX)/s+18,lat:53-(y-mapState.h/2-mapState.panY)/s};}
 function resizeCanvas(){
@@ -182,7 +191,7 @@ function renderBase(){
 }
 function drawCapitals(){
  // Only 1900 has a curated historical capital list; other years show no capital stars.
- if(state.year!==1900)return;
+ if(state.year!==1900||(state.phase==='question'&&currentQuestion().type==='city'))return;
  const c=ctx,w=mapState.w,h=mapState.h;
  c.save();
  for(const id of CAPITALS_1900){
@@ -208,7 +217,7 @@ function drawRoute(){
  }
  if(state.transit){const {fromId,toId,progress}=state.transit,a=CITIES[fromId],b=CITIES[toId],p=project(a.lon,a.lat),q=project(b.lon,b.lat);
    c.beginPath();c.moveTo(p.x,p.y);c.lineTo(p.x+(q.x-p.x)*progress,p.y+(q.y-p.y)*progress);
-   c.strokeStyle='#9f6d3d';c.lineWidth=2.3;c.setLineDash([4,4]);c.stroke();c.setLineDash([]);
+   c.strokeStyle='#9f6d3d';c.lineWidth=3.2;c.setLineDash([5,6]);c.stroke();c.setLineDash([]);
    drawTrain(p.x+(q.x-p.x)*progress,p.y+(q.y-p.y)*progress);
  }else{
    const current=CITIES[state.currentCity];const p=project(current.lon,current.lat);
@@ -223,7 +232,7 @@ function drawCountryHighlight(){const id=currentQuestion().targetId,c=ctx;
 }
 function drawCityCandidates(){const q=currentQuestion(),c=ctx;
  q.candidates.forEach((id,i)=>{const city=CITIES[id],p=project(city.lon,city.lat),isAnswered=state.phase==='feedback',selected=isAnswered&&id===q.targetId,wrong=state.wrongIds.includes(id);
-  c.save();c.beginPath();c.arc(p.x,p.y,22,0,Math.PI*2);c.fillStyle='rgba(244,230,195,.14)';c.fill();
+  c.save();c.beginPath();c.arc(p.x,p.y,23,0,Math.PI*2);c.fillStyle='rgba(244,230,195,.25)';c.fill();
   c.beginPath();c.arc(p.x,p.y,16,0,Math.PI*2);c.fillStyle=selected?'#567352':wrong?'#ad6b5a':'#5f503a';c.fill();c.strokeStyle='#f5e9ce';c.lineWidth=2;c.stroke();
   c.fillStyle='#f5e9ce';c.font='bold 12px Arial,sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText('ABCDE'[i],p.x,p.y+1);
   if(selected){c.font='bold 12px Georgia,serif';const w=c.measureText(city.name).width+16;const x=Math.min(mapState.w-w-4,Math.max(4,p.x-w/2));const y=p.y-46;c.fillStyle='#f7e9cd';c.fillRect(x,y,w,22);c.strokeStyle='#93794f';c.strokeRect(x,y,w,22);c.fillStyle='#443521';c.textAlign='left';c.fillText(city.name,x+8,y+12);}
@@ -244,23 +253,35 @@ function distanceToSegment(px,py,x1,y1,x2,y2){const dx=x2-x1,dy=y2-y1,t=Math.max
 function nearBorder(pt,feature){const p=project(pt.lon,pt.lat);for(const piece of feature.pieces)for(const ring of piece){for(let i=1;i<ring.length;i++){const a=project(...ring[i-1]),b=project(...ring[i]);if(distanceToSegment(p.x,p.y,a.x,a.y,b.x,b.y)<4)return true;}}return false;}
 function hitCity(x,y){const q=currentQuestion();if(q.type!=='city')return null;let best=null,bestDistance=22;for(const id of q.candidates){const city=CITIES[id],p=project(city.lon,city.lat),d=Math.hypot(x-p.x,y-p.y);if(d<bestDistance){bestDistance=d;best=id;}}return best;}
 function canvasPosition(e){const r=canvas.getBoundingClientRect();return {x:e.clientX-r.left,y:e.clientY-r.top};}
-canvas.addEventListener('pointerdown',e=>{canvas.setPointerCapture(e.pointerId);const p=canvasPosition(e);mapState.drag={x:p.x,y:p.y,fromX:p.x,fromY:p.y,moved:false};});
+function pointerPair(){const p=[...mapState.pointers.values()];return {x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2,d:Math.max(1,Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y))};}
+canvas.addEventListener('pointerdown',e=>{
+ canvas.setPointerCapture(e.pointerId);const p=canvasPosition(e);mapState.pointers.set(e.pointerId,p);
+ if(mapState.pointers.size===2){mapState.pinch=pointerPair();mapState.drag=null;return;}
+ if(mapState.pointers.size>2){mapState.drag=null;return;}
+ mapState.pinch=null;mapState.drag={x:p.x,y:p.y,fromX:p.x,fromY:p.y,moved:false};
+});
 canvas.addEventListener('pointermove',e=>{
- const p=canvasPosition(e);if(mapState.drag){const d=mapState.drag,dx=p.x-d.x,dy=p.y-d.y;d.x=p.x;d.y=p.y;if(Math.abs(p.x-d.fromX)+Math.abs(p.y-d.fromY)>7)d.moved=true;if(d.moved){mapState.panX+=dx;mapState.panY+=dy;mapState.needsBase=true;scheduleDraw();}return;}
+ const p=canvasPosition(e);
+ if(mapState.pointers.has(e.pointerId))mapState.pointers.set(e.pointerId,p);
+ if(mapState.pointers.size>=2){const next=pointerPair();if(mapState.pinch){
+  zoomAt(next.d/mapState.pinch.d,mapState.pinch.x,mapState.pinch.y);
+  mapState.panX+=next.x-mapState.pinch.x;mapState.panY+=next.y-mapState.pinch.y;mapState.needsBase=true;scheduleDraw();
+ }mapState.pinch=next;mapState.drag=null;return;}
+ if(mapState.drag){const d=mapState.drag,dx=p.x-d.x,dy=p.y-d.y;d.x=p.x;d.y=p.y;if(Math.abs(p.x-d.fromX)+Math.abs(p.y-d.fromY)>7)d.moved=true;if(d.moved){mapState.panX+=dx;mapState.panY+=dy;mapState.needsBase=true;scheduleDraw();}return;}
  if(state.phase==='question'&&isNavigation()){state.hover=null;scheduleDraw();return;}
  const feature=hitCountry(unproject(p.x,p.y));state.hover=feature?{name:feature.displayName,...p}:null;scheduleDraw();
 });
 canvas.addEventListener('pointerup',e=>{
- const d=mapState.drag;mapState.drag=null;if(!d||d.moved)return;const p=canvasPosition(e);
+ const wasPinching=!!mapState.pinch;mapState.pointers.delete(e.pointerId);mapState.pinch=null;const d=mapState.drag;mapState.drag=null;if(wasPinching||!d||d.moved)return;const p=canvasPosition(e);
  if(state.phase==='question'&&isNavigation()){
    if(!mapState.features.length)return;
    if(currentQuestion().type==='city')guessCity(hitCity(p.x,p.y));
    else {const pt=unproject(p.x,p.y),country=hitCountry(pt);if(country){if(nearBorder(pt,country)){$('map-status').textContent='Click further inside the border';return;}guessCountry(country);}}
  }else{const feature=hitCountry(unproject(p.x,p.y));state.hover=feature?{name:feature.displayName,...p}:null;scheduleDraw();}
 });
-canvas.addEventListener('pointercancel',()=>{mapState.drag=null;});
+canvas.addEventListener('pointercancel',e=>{mapState.pointers.delete(e.pointerId);mapState.drag=null;mapState.pinch=null;});
 canvas.addEventListener('pointerleave',()=>{if(!mapState.drag){state.hover=null;scheduleDraw();}});
-canvas.addEventListener('wheel',e=>{e.preventDefault();changeZoom(e.deltaY<0?1.1:1/1.1);},{passive:false});
+canvas.addEventListener('wheel',e=>{e.preventDefault();const p=canvasPosition(e);zoomAt(e.deltaY<0?1.12:1/1.12,p.x,p.y);},{passive:false});
 window.addEventListener('resize',resizeCanvas);
 if('ResizeObserver' in window)new ResizeObserver(resizeCanvas).observe(view);
 resizeCanvas();if(readSaved())restoreGame();else{renderJournal();loadMap(1900);}
